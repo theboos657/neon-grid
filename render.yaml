@@ -1,0 +1,19 @@
+# One-click deploy of the NEON GRID relay server on Render (free plan works).
+#   1. Push this folder to a GitHub repository.
+#   2. On https://dashboard.render.com choose  New > Blueprint  and pick the repo.
+#   3. When it is live, copy its URL (https://neongrid-relay-xxxx.onrender.com)
+#      and put it in assets/config.json as  "wss://neongrid-relay-xxxx.onrender.com"
+#      (or type it in Multiplayer > SERVER / HOST IP).
+# Free Render services sleep after ~15 idle minutes; the first connection then
+# takes up to a minute while it wakes up.  The game waits for it.
+services:
+  - type: web
+    name: neongrid-relay
+    runtime: python
+    plan: free
+    buildCommand: "echo no dependencies"
+    startCommand: "python server/relay_server.py --host 0.0.0.0"
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
