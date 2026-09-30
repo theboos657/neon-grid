@@ -140,6 +140,113 @@ def radial_glow(size=64):
     return _to_texture("glow", img, mipmap=False)
 
 
+# ---------------------------------------------------------------------------
+# Map textures (forest / backrooms).  Mostly luminance detail around ~0.8 so
+# vertex colours can tint them; created lazily by TextureBank.get().
+# ---------------------------------------------------------------------------
+def _gray(name, v, mipmap=True, tint=(1.0, 1.0, 1.0)):
+    img = np.zeros(v.shape + (4,))
+    for i in range(3):
+        img[..., i] = v * tint[i]
+    img[..., 3] = 1
+    return _to_texture(name, img, mipmap)
+
+
+def grass(size=256):
+    """Tiles every 4 m: green with dry patches and blade speckle."""
+    rng = np.random.default_rng(21)
+    patches = fbm(size, 4, 4, rng)
+    blades = rng.random((size, size))
+    detail = fbm(size, 32, 2, rng)
+    v = 0.55 + 0.35 * detail + 0.25 * (blades - 0.5)
+    dry = np.clip((patches - 0.52) * 4.0, 0, 1)
+    img = np.zeros((size, size, 4))
+    img[..., 0] = v * (0.30 + 0.35 * dry)
+    img[..., 1] = v * (0.62 + 0.05 * dry)
+    img[..., 2] = v * (0.18 + 0.05 * dry)
+    img[..., 3] = 1
+    return _to_texture("grass", img)
+
+
+def bark(size=128):
+    rng = np.random.default_rng(22)
+    y, x = np.mgrid[0:size, 0:size]
+    n = fbm(size, 8, 3, rng)
+    ridges = 0.5 + 0.5 * np.sin(x * (np.pi * 2 * 10 / size) + n * 7.0)
+    v = 0.45 + 0.4 * ridges * (0.7 + 0.3 * fbm(size, 16, 2, rng))
+    return _gray("bark", v)
+
+
+def foliage(size=128):
+    rng = np.random.default_rng(23)
+    n = fbm(size, 16, 3, rng)
+    speck = rng.random((size, size))
+    v = 0.55 + 0.4 * n + 0.2 * (speck - 0.5)
+    return _gray("foliage", v)
+
+
+def wood(size=128):
+    """Horizontal log / plank grain."""
+    rng = np.random.default_rng(24)
+    y, x = np.mgrid[0:size, 0:size]
+    n = fbm(size, 4, 4, rng)
+    grain = 0.5 + 0.5 * np.sin(y * (np.pi * 2 * 6 / size) + n * 9.0)
+    seam = (y % (size // 4)) < 2
+    v = 0.6 + 0.3 * grain
+    v = np.where(seam, 0.3, v)
+    return _gray("wood", v)
+
+
+def rock(size=128):
+    rng = np.random.default_rng(25)
+    n = fbm(size, 6, 5, rng)
+    cracks = np.abs(fbm(size, 10, 3, rng) - 0.5) < 0.02
+    v = 0.5 + 0.45 * n
+    v = np.where(cracks, v * 0.55, v)
+    return _gray("rock", v)
+
+
+def carpet(size=256):
+    """Damp office carpet, tiles every 4 m."""
+    rng = np.random.default_rng(26)
+    fibre = rng.random((size, size))
+    n = fbm(size, 8, 4, rng)
+    damp = np.clip((fbm(size, 3, 4, rng) - 0.55) * 3.0, 0, 1)
+    v = (0.72 + 0.18 * n + 0.14 * (fibre - 0.5)) * (1.0 - 0.3 * damp)
+    return _gray("carpet", v)
+
+
+def wallpaper(size=256):
+    """Mono-yellow wallpaper: faint vertical stripes with a diamond motif, grime at the bottom.
+    One tile = 2 m wide, 4 m tall (v runs up the wall)."""
+    rng = np.random.default_rng(27)
+    y, x = np.mgrid[0:size, 0:size]
+    stripe = 0.5 + 0.5 * np.cos(x * (np.pi * 2 * 8 / size))
+    dx = np.abs(((x % (size // 8)) - size / 16) / (size / 16))
+    dy = np.abs(((y % (size // 8)) - size / 16) / (size / 16))
+    diamond = (np.abs((dx + dy) - 0.8) < 0.12).astype(float)
+    n = fbm(size, 4, 4, rng)
+    v = 0.82 + 0.06 * stripe + 0.07 * diamond - 0.12 * n
+    # bottom of the texture is the bottom of the wall (row 0 is the top in numpy)
+    grime = np.clip((y / size - 0.8) * 4.0, 0, 1) * (0.3 + 0.4 * n)
+    v = v * (1.0 - grime * 0.45)
+    return _gray("wallpaper", v)
+
+
+def ceiling_tiles(size=128):
+    """Drop-ceiling tiles, 2 x 2 tiles per texture (tile = 0.6 m)."""
+    rng = np.random.default_rng(28)
+    y, x = np.mgrid[0:size, 0:size]
+    half = size // 2
+    edge = ((x % half) < 3) | ((y % half) < 3)
+    pits = rng.random((size, size)) < 0.04
+    n = fbm(size, 8, 3, rng)
+    v = 0.78 + 0.12 * n
+    v = np.where(pits, v * 0.8, v)
+    v = np.where(edge, 0.55, v)
+    return _gray("ceiling", v)
+
+
 class TextureBank:
     """Create all procedural textures once."""
 
@@ -150,3 +257,14 @@ class TextureBank:
         self.floor = floor()
         self.stripes = hazard_stripes()
         self.glow = radial_glow()
+        self._lazy = {}
+
+    _MAKERS = {"grass": grass, "bark": bark, "foliage": foliage, "wood": wood, "rock": rock,
+               "carpet": carpet, "wallpaper": wallpaper, "ceiling": ceiling_tiles}
+
+    def get(self, name):
+        """Map textures are only generated the first time a map needs them."""
+        tex = self._lazy.get(name)
+        if tex is None:
+            tex = self._lazy[name] = self._MAKERS[name]()
+        return tex

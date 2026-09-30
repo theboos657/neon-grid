@@ -48,6 +48,41 @@ class LightRig:
         root.setShaderInput("u_time", 0.0)
         root.setShaderInput("u_camPos", Vec3(0, 0, 0))
         root.setShaderInput("u_hueLock", 0.0)
+        root.setShaderInput("u_sunDir", Vec4(0, 0, 1, 0))
+        root.setShaderInput("u_sunCol", Vec3(0, 0, 0))
+        self.theme = None
+        self.dusk = 0.0
+
+    def set_theme(self, theme):
+        """Map lighting (forest daylight, backrooms fluorescents).  None = neon arena."""
+        if not theme or theme.get("hue_cycle", True):
+            self.theme = None
+            return
+        self.theme = theme
+        self.cycle_period = theme.get("cycle", 240.0)
+        d = Vec3(*theme.get("sun_dir", (0, 0, 1)))
+        d.normalize()
+        self.root.setShaderInput("u_sunDir", Vec4(d.x, d.y, d.z, 0))
+        self._apply_theme(0.0)
+
+    @staticmethod
+    def _mix(a, b, k):
+        return tuple(x + (y - x) * k for x, y in zip(a, b))
+
+    def _apply_theme(self, k):
+        th = self.theme
+        amb = th["ambient"]
+        sun = th.get("sun_col", (0, 0, 0))
+        fog = th["fog"]
+        if "dusk_ambient" in th:
+            amb = self._mix(amb, th["dusk_ambient"], k)
+            sun = self._mix(sun, th["dusk_sun_col"], k)
+            fog = self._mix(fog, th["dusk_fog"], k)
+            # the sun sinks towards the horizon in the evening
+            sun = tuple(c * (1.0 - 0.45 * k) for c in sun)
+        self.root.setShaderInput("u_ambient", Vec3(*amb))
+        self.root.setShaderInput("u_sunCol", Vec3(*sun))
+        self.root.setShaderInput("u_fog", Vec4(*fog))
 
     def add_static(self, pos, color=(0.2, 0.9, 1.0), radius=22.0, intensity=1.0):
         self.static.append((Vec3(*pos), color, radius, intensity))
@@ -64,12 +99,19 @@ class LightRig:
         # --- day/night style neon cycle: hue drifts +/- ~12 degrees, gain breathes
         self.cycle_time += dt
         ph = (self.cycle_time / self.cycle_period) * math.tau
-        self.hue = math.sin(ph) * 0.22 + math.sin(ph * 3.1) * 0.05       # radians
-        self.gain = 1.0 + 0.16 * math.sin(ph + 1.3)
-        amb = 0.045 + 0.02 * (0.5 + 0.5 * math.cos(ph))
+        if self.theme is not None:
+            # natural light: no neon hue drift; outdoors the day slides towards dusk and back
+            self.hue = 0.0
+            self.gain = 1.0
+            self.dusk = (0.5 - 0.5 * math.cos(ph)) * 0.85
+            self._apply_theme(self.dusk)
+        else:
+            self.hue = math.sin(ph) * 0.22 + math.sin(ph * 3.1) * 0.05       # radians
+            self.gain = 1.0 + 0.16 * math.sin(ph + 1.3)
+            amb = 0.045 + 0.02 * (0.5 + 0.5 * math.cos(ph))
+            self.root.setShaderInput("u_ambient", Vec3(amb * 0.8, amb, amb * 1.15))
         self.root.setShaderInput("u_hue", self.hue)
         self.root.setShaderInput("u_neonGain", self.gain)
-        self.root.setShaderInput("u_ambient", Vec3(amb * 0.8, amb, amb * 1.15))
         self.root.setShaderInput("u_time", time_now)
         self.root.setShaderInput("u_camPos", cam_pos)
 

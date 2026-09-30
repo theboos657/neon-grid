@@ -2,14 +2,15 @@
 
 Client -> server
     hello   {name, ver, skin, loadout{primary,secondary,melee}, tiers{wid:tier}}
-    create  {config{time_limit, score_limit}}      join {code}      start {}
+    create  {config{time_limit, score_limit, map}} join {code}      start {}
+    map     {map}   (host, lobby only: grid / forest / backrooms)
     st      {p[x,y,z], yaw, pitch, cr, w}           (20 Hz movement state)
     fire    {w, o[3], d[3], ds[[3]...], seq}        (hitscan or projectile launch)
     reload  {w}          melee {w, o, d}          phit {seq, tgt|None, pos[3]}
     ping    {t}          leave {}
 Server -> client
-    welcome {id}         room {code, host, players[{id,name,skin}], state}
-    start   {spawns{id:[x,y,z,yaw]}, time_limit, score_limit}
+    welcome {id}         room {code, host, players[{id,name,skin}], state, map, mode}
+    start   {spawns{id:[x,y,z,yaw]}, time_limit, score_limit, map, mode}
     snap    {t, left, pl[[id,x,y,z,yaw,pitch,cr,alive,hp,w,score,kills,deaths,ping]]}
     shot    {id, w, o, e[[3]...]}    hit {a, v, dmg, hs, hp}    kill {k, v, w, hs}
     respawn {id, p[x,y,z,yaw]}       correct {p}      end {scores[[id,name,k,d,s]], winner}

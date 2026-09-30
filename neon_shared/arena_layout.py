@@ -1,8 +1,12 @@
-"""Static layout of THE GRID arena (shared by client rendering, bot navigation
-and server-side line-of-sight validation).
+"""Static map layouts (shared by client rendering, bot navigation and
+server-side line-of-sight validation).
 
 Coordinates: metres, Z up, floor at z = 0, arena spans [-HALF, HALF] on X/Y.
 Boxes are tuples ``(minx, miny, minz, maxx, maxy, maxz, kind)``.
+
+The module-level names below describe the *current* map (THE GRID at import).
+The client calls ``load(map_id)`` before building a match; the server keeps one
+``get(map_id)`` layout object per room, because several rooms can run at once.
 """
 
 HALF = 32.0
@@ -105,3 +109,57 @@ HOLO_SIGNS = [  # x, y, z, heading, text key
     (0, HALF - 0.3, 8.5, 180, "sign_grid"), (0, -HALF + 0.3, 8.5, 0, "sign_arena"),
     (HALF - 0.3, 8, 9.0, 90, "sign_sponsor"), (-HALF + 0.3, -8, 9.0, 270, "sign_danger"),
 ]
+
+DECOR = []          # map-specific scenery the visual builder draws (grid has none)
+THEME = {"sky": False}
+
+KEYS = ("HALF", "WALL_H", "CEILING_Z", "CATWALK_Z", "STATIC_BOXES", "SLIDING_WALLS", "SPAWNS",
+        "LOOT_BOXES", "CHARGE_PORTS", "JUMP_PADS", "TURRETS", "TRAP_SPOTS", "DRONE_SPAWNS",
+        "GRAVITY_ZONES", "LASER_SWEEPERS", "MINE_FIELD", "HOLO_SIGNS", "DECOR", "THEME")
+
+MAP_IDS = ["grid", "forest", "backrooms"]
+CURRENT = "grid"
+_GRID = {k: globals()[k] for k in KEYS}
+_CACHE = {}
+
+
+class Layout:
+    """Read-only bundle of one map's layout (same attribute names as this module)."""
+
+    def __init__(self, map_id, data):
+        self.map_id = map_id
+        self.__dict__.update(data)
+
+
+def _data(map_id):
+    if map_id == "forest":
+        from .maps import forest
+        return forest.build()
+    if map_id == "backrooms":
+        from .maps import backrooms
+        return backrooms.build()
+    return dict(_GRID)
+
+
+def get(map_id):
+    if map_id not in MAP_IDS:
+        map_id = "grid"
+    lay = _CACHE.get(map_id)
+    if lay is None:
+        lay = _CACHE[map_id] = Layout(map_id, _data(map_id))
+    return lay
+
+
+def load(map_id):
+    """Make ``map_id`` the current map for everything that reads ``arena_layout.X``."""
+    global CURRENT
+    lay = get(map_id)
+    g = globals()
+    for k in KEYS:
+        g[k] = getattr(lay, k)
+    CURRENT = lay.map_id
+    return lay
+
+
+def valid(map_id):
+    return map_id if map_id in MAP_IDS else "grid"

@@ -40,6 +40,8 @@ class CollisionWorld:
                 self.grid.setdefault(key, []).append(b)
         # everything for raycasts (ceiling included)
         self.ray_boxes = list(boxes)
+        self.ray_always = [b for b in boxes if b[6] == "ceiling"]
+        self.grid_lim = int(math.ceil((L.HALF + 8) / CELL))
 
     @staticmethod
     def _cells(x0, y0, x1, y1):
@@ -67,15 +69,51 @@ class CollisionWorld:
     def raycast(self, o, d, max_t, dynamic=True):
         """Returns (t, normal Vec3) of the first box hit, or (None, None)."""
         best_t = max_t
-        best_n = None
-        boxes = self.ray_boxes + self.dynamic if dynamic else self.ray_boxes
+        best = None
+        boxes = self.ray_always + self.dynamic if dynamic else self.ray_always
         for b in boxes:
             r = ray_aabb(o, d, b, best_t)
             if r is not None and r[0] < best_t:
-                best_t = r[0]
-                n = Vec3(0, 0, 0)
-                n[r[1]] = r[2]
-                best_n = n
+                best_t, best = r[0], r
+        # walk the XY grid cells along the ray (maps can have hundreds of boxes)
+        ox, oy, dx, dy = o[0], o[1], d[0], d[1]
+        cx = int(math.floor(ox / CELL))
+        cy = int(math.floor(oy / CELL))
+        sx = 1 if dx > 0 else -1
+        sy = 1 if dy > 0 else -1
+        inf = float("inf")
+        tdx = CELL / abs(dx) if abs(dx) > 1e-9 else inf
+        tdy = CELL / abs(dy) if abs(dy) > 1e-9 else inf
+        tmx = ((cx + (1 if dx > 0 else 0)) * CELL - ox) / dx if abs(dx) > 1e-9 else inf
+        tmy = ((cy + (1 if dy > 0 else 0)) * CELL - oy) / dy if abs(dy) > 1e-9 else inf
+        seen = set()
+        lim = self.grid_lim
+        grid = self.grid
+        for _ in range(4 * lim + 4):
+            for b in grid.get((cx, cy), ()):
+                i = id(b)
+                if i in seen:
+                    continue
+                seen.add(i)
+                r = ray_aabb(o, d, b, best_t)
+                if r is not None and r[0] < best_t:
+                    best_t, best = r[0], r
+            if tmx < tmy:
+                if best_t <= tmx:
+                    break
+                cx += sx
+                tmx += tdx
+            else:
+                if best_t <= tmy:
+                    break
+                cy += sy
+                tmy += tdy
+            if abs(cx) > lim or abs(cy) > lim:
+                break
+        best_n = None
+        if best is not None:
+            best_n = Vec3(0, 0, 0)
+            best_n[best[1]] = best[2]
         # floor plane
         if d[2] < -1e-6:
             tf = -o[2] / d[2]

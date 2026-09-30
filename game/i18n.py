@@ -418,6 +418,62 @@ def language():
     return _lang
 
 
+# --- maps & match briefing ---------------------------------------------------
+STRINGS["en"].update({
+    "opt_map": "MAP", "map_grid": "THE GRID", "map_forest": "FOREST",
+    "map_backrooms": "BACKROOMS", "map_random": "RANDOM",
+    "mapdesc_grid": "Neon arena with catwalks, jump pads and sliding walls.",
+    "mapdesc_forest": "Open woods: a log cabin, two watchtowers, trees and bushes to hide in.",
+    "mapdesc_backrooms": "Endless yellow rooms, buzzing lights, police cars and junk everywhere.",
+    "mapdesc_random": "A surprise map. You find out when the match starts.",
+    "mode_online": "ONLINE FREE FOR ALL",
+    "brief_map": "MAP: {map}", "brief_goal": "OBJECTIVE", "brief_tip": "WHERE TO GO",
+    "goal_ffa": "Everyone is your enemy. First to {n} kills wins.",
+    "goal_time": "{n} minute limit: most kills when time runs out wins.",
+    "goal_duel": "Beat the bot. First to {n} kills wins.",
+    "goal_team": "Fight alongside your wingmen. First team to {n} kills wins.",
+    "goal_coop": "Survive the waves together with your AI squad.",
+    "goal_endless": "Survive the waves alone for as long as you can.",
+    "goal_online": "Online free-for-all. First to {n} kills wins.",
+    "goal_lives": "You have {n} lives. Be the last one standing.",
+    "goal_chaos": "CHAOS: lasers, mines and gravity zones are active.",
+    "tip_grid": "Grab the loot on the centre platform, then ride the jump pads up to the "
+                "catwalks for the high ground.",
+    "tip_forest": "The jump pads next to the cabin launch you onto its roof; the ones by the "
+                  "watchtowers reach the decks. Crouch inside bushes to hide.",
+    "tip_backrooms": "No high ground down here. Use police cars and furniture as cover and "
+                     "check the loot rooms in the middle. Don't get lost.",
+    "mp_map_btn": "MAP: {map}", "mp_room_info": "{mode}   |   {map}   |   FIRST TO {n}",
+    "mp_map_old_server": "This server is out of date and only has THE GRID.",
+})
+STRINGS["he"].update({
+    "opt_map": "מפה", "map_grid": "הגריד", "map_forest": "יער",
+    "map_backrooms": "הבקרומס", "map_random": "אקראי",
+    "mapdesc_grid": "זירת ניאון עם גשרונים, משטחי קפיצה וקירות זזים.",
+    "mapdesc_forest": "יער פתוח: בקתת עץ, שני מגדלי תצפית, עצים ושיחים להסתתר בהם.",
+    "mapdesc_backrooms": "חדרים צהובים אינסופיים, אורות מזמזמים, ניידות משטרה וגרוטאות בכל מקום.",
+    "mapdesc_random": "מפת הפתעה. תגלו כשהמשחק יתחיל.",
+    "mode_online": "כולם נגד כולם אונליין",
+    "brief_map": "מפה: {map}", "brief_goal": "מטרה", "brief_tip": "לאן ללכת",
+    "goal_ffa": "כולם אויבים. הראשון ל-{n} הריגות מנצח.",
+    "goal_time": "מגבלת זמן של {n} דקות: הכי הרבה הריגות כשהזמן נגמר מנצח.",
+    "goal_duel": "נצחו את הבוט. הראשון ל-{n} הריגות מנצח.",
+    "goal_team": "הילחמו לצד חברי הצוות. הקבוצה הראשונה ל-{n} הריגות מנצחת.",
+    "goal_coop": "שרדו את הגלים יחד עם צוות הבוטים שלכם.",
+    "goal_endless": "שרדו את הגלים לבד כמה שיותר זמן.",
+    "goal_online": "כולם נגד כולם אונליין. הראשון ל-{n} הריגות מנצח.",
+    "goal_lives": "יש לכם {n} חיים. היו האחרונים ששורדים.",
+    "goal_chaos": "כאוס: לייזרים, מוקשים ואזורי כבידה פעילים.",
+    "tip_grid": "קחו את השלל על הבמה המרכזית, ואז עלו במשטחי הקפיצה לגשרונים בשביל הגובה.",
+    "tip_forest": "משטחי הקפיצה ליד הבקתה מעיפים אתכם לגג שלה, ואלה שליד מגדלי התצפית "
+                  "לתצפיות. התכופפו בתוך שיחים כדי להסתתר.",
+    "tip_backrooms": "אין פה גובה. השתמשו בניידות המשטרה ובריהוט כמחסה ובדקו את חדרי השלל "
+                     "באמצע. אל תלכו לאיבוד.",
+    "mp_map_btn": "מפה: {map}", "mp_room_info": "{mode}   |   {map}   |   הראשון ל-{n}",
+    "mp_map_old_server": "השרת הזה לא מעודכן ויש בו רק את הגריד.",
+})
+
+
 def is_rtl():
     return _lang == "he"
 

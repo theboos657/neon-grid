@@ -133,6 +133,16 @@ class HUD:
         self.big_sub = T.text(self.root, "", (0, 0.24), 0.055, T.WHITE, "center", f_ui)
         self.caption = T.text(self.root, "", (0, 0.55), 0.075, T.GOLD, "center", f_disp)
         self.countdown = T.text(self.root, "", (0, 0.1), 0.22, T.CYAN, "center", f_disp)
+        # match briefing (mode, map, objective, where to go) during the countdown
+        self.brief = self.root.attachNewNode("brief")
+        self.brief_bg = self.brief.attachNewNode("bg")      # sized to the text in _fill_brief
+        self.brief_mode = T.text(self.brief, "", (0, 0.715), 0.07, T.CYAN, "center", f_disp)
+        self.brief_map = T.text(self.brief, "", (0, 0.645), 0.044, T.GOLD, "center", f_disp)
+        self.brief_goal = T.text(self.brief, "", (0, 0.58), 0.034, T.WHITE, "center", f_ui)
+        self.brief_tip_h = T.text(self.brief, "", (0, 0.425), 0.03, T.CYAN, "center", f_ui)
+        self.brief_tip = T.text(self.brief, "", (0, 0.38), 0.031, T.GREY, "center", f_ui)
+        self.brief.hide()
+        self.brief_t = 0.0
         self.respawn = T.text(self.root, "", (0, -0.2), 0.07, T.WHITE, "center", f_ui)
         self.fps = T.text(self.root, "", (0, 0), 0.04, T.GREY, "left", f_ui)
         self.fps.reparentTo(self.app.a2dTopLeft)
@@ -308,9 +318,57 @@ class HUD:
         self.place_all()
         self.root.show()
         self._refresh_ability_icons()
+        self._fill_brief(match)
+
+    def _fill_brief(self, m):
+        """What mode, which map, what to do and where to go - shown while the match counts down."""
+        rtl = i18n.is_rtl()
+
+        def vis(s, width):
+            s = i18n.wrap(s, width)
+            return i18n.visual(s) if rtl else s
+        mode = m.config.get("mode", "ffa")
+        md = m.mode
+        n = md.score_limit
+        goals = []
+        if mode in ("coop", "endless"):
+            goals.append(i18n.raw("goal_" + mode))
+        else:
+            key = "goal_" + mode if mode in ("ffa", "duel", "team", "online") else "goal_ffa"
+            goals.append(i18n.raw(key, n=n))
+        tl = md.time_limit
+        if m.online and m.net is not None:
+            tl = m.net.time_left or 0
+        if tl:
+            goals.append(i18n.raw("goal_time", n=int(round(tl / 60.0))))
+        if md.lives:
+            goals.append(i18n.raw("goal_lives", n=md.lives))
+        if md.chaos:
+            goals.append(i18n.raw("goal_chaos"))
+        T.set_text(self.brief_mode, i18n.t("mode_" + mode))
+        T.set_text(self.brief_map, i18n.t("brief_map", map=i18n.raw("map_" + m.map_id)))
+        T.set_text(self.brief_goal, "\n".join(vis(g, 62) for g in goals[:4]))
+        T.set_text(self.brief_tip_h, i18n.t("brief_tip"))
+        # the tip sits under however many objective lines there are
+        lines = sum(vis(g, 62).count("\n") + 1 for g in goals[:4])
+        y = 0.58 - 0.041 * lines - 0.025
+        self.brief_tip_h.setZ(y)
+        self.brief_tip.setZ(y - 0.045)
+        tip = vis(i18n.raw("tip_" + m.map_id), 70)
+        T.set_text(self.brief_tip, tip)
+        bottom = y - 0.045 - 0.038 * tip.count("\n") - 0.035
+        for ch in list(self.brief_bg.getChildren()):
+            ch.removeNode()
+        top = 0.8
+        T.card(self.brief_bg, -1.0, 1.0, bottom, top, (0.01, 0.03, 0.045, 0.8))
+        T.card(self.brief_bg, -1.0, 1.0, top - 0.007, top, T.CYAN)
+        T.card(self.brief_bg, -1.0, 1.0, bottom, bottom + 0.006, T.CYAN_DIM)
+        self.brief_t = 0.0
+        self.brief.hide()
 
     def end_match(self):
         self.match = None
+        self.brief.hide()
         self.root.hide()
         self.scoreboard.hide()
         self.fps.hide()
@@ -393,9 +451,19 @@ class HUD:
         # countdown
         if m.state == "countdown":
             n = int(math.ceil(m.state_t))
-            T.set_text(self.countdown, str(max(1, n)) if n > 0 else "")
+            T.set_text(self.countdown, str(max(1, n)) if n > 0 and n <= 3 else "")
+            self.brief.show()
+            self.brief.setAlphaScale(1.0)
+            self.brief_t = 0.7
+            self.caption.hide()              # the 3-2-1 captions would cover the briefing
         else:
             T.set_text(self.countdown, "")
+            self.caption.show()
+            if self.brief_t > 0:
+                self.brief_t -= dt
+                self.brief.setAlphaScale(max(0.0, self.brief_t / 0.7))
+                if self.brief_t <= 0:
+                    self.brief.hide()
         # big message / caption timers
         if self.big_t > 0:
             self.big_t -= dt

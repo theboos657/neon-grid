@@ -256,6 +256,8 @@ class ViewModel:
         a.setShaderInput("u_ambient", Vec3(0.55, 0.62, 0.7))
         a.setShaderInput("u_fog", Vec4(0, 0, 0, 0))
         a.setShaderInput("u_mirror", 0.0)
+        a.setShaderInput("u_sunDir", Vec4(0, 0, 1, 0))
+        a.setShaderInput("u_sunCol", Vec3(0, 0, 0))
         a.setShaderInput("u_hue", 0.0)
         a.setShaderInput("u_neonGain", 1.0)
         a.setShaderInput("u_time", 0.0)

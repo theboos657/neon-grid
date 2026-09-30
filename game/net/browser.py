@@ -134,7 +134,7 @@ class RoomBrowser:
                 found.append(dict(r, source="online", addr=self.relay, ping=ping))
         found.sort(key=lambda r: (r["state"] != "lobby", r["source"] != "lan", -r["players"]))
         def sig(rs):
-            return [(r["code"], r["players"], r["state"], r["source"]) for r in rs]
+            return [(r["code"], r["players"], r["state"], r["source"], r.get("map")) for r in rs]
         with self.lock:
             if sig(found) != sig(self.rooms) or self.status != "done":
                 self.version += 1

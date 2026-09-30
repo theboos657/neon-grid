@@ -26,10 +26,15 @@ uniform vec3 u_camPos;
 uniform vec3 u_ambient;
 uniform vec4 u_fog;           // rgb, density
 uniform float u_mirror;       // 1 when rendered through the floor reflection
+uniform vec4 u_sunDir;        // xyz towards the sun (outdoor maps), w unused
+uniform vec3 u_sunCol;        // black indoors
 
 vec3 shade(vec3 P, vec3 N, vec3 base, float gloss, float specAmt) {
     vec3 V = normalize(u_camPos - P);
     vec3 acc = u_ambient * base;
+    vec3 sd = u_sunDir.xyz;
+    if (u_mirror > 0.5) sd.z = -sd.z;
+    acc += u_sunCol * base * max(dot(N, sd), 0.0);
     for (int i = 0; i < 8; ++i) {
         if (i >= u_numLights) break;
         vec3 lp = u_lightPos[i].xyz;

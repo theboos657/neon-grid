@@ -52,6 +52,8 @@ class NetSession:
         self.time_left = None
         self.score_limit = 25
         self.names = {}
+        self.map = "grid"
+        self.map_supported = False     # servers older than 1.0.9 only know THE GRID
 
     # ------------------------------------------------------------------ connect
     def _address(self):
@@ -197,8 +199,18 @@ class NetSession:
         return str(e) or e.__class__.__name__
 
     def _config(self):
+        from neon_shared import arena_layout as L
         cfg = self.app.storage.profile["last_mode"]
-        return {"time_limit": cfg.get("time_limit") or 8, "score_limit": cfg.get("score_limit", 25)}
+        mp = cfg.get("map", "grid")
+        if mp not in L.MAP_IDS:
+            import random
+            mp = random.choice(L.MAP_IDS)
+        return {"time_limit": cfg.get("time_limit") or 8, "score_limit": cfg.get("score_limit", 25),
+                "map": mp}
+
+    def set_map(self, map_id):
+        """Host only: change the room's map while everyone is in the lobby."""
+        self.send({"t": "map", "map": map_id})
 
     # ------------------------------------------------------------------ io
     def send(self, msg):
@@ -295,8 +307,13 @@ class NetSession:
         self.my_id = msg["id"]
 
     def _m_room(self, msg):
+        from neon_shared import arena_layout as L
         self.code = msg.get("code", "")
         self.is_host = msg.get("host") == self.my_id
+        self.map_supported = "map" in msg
+        self.map = L.valid(msg.get("map", "grid"))
+        if isinstance(msg.get("score_limit"), int):
+            self.score_limit = msg["score_limit"]
         self.lobby_players = []
         for pl in msg.get("players", []):
             self.names[pl["id"]] = pl["name"]
@@ -314,8 +331,10 @@ class NetSession:
         self.score_limit = msg.get("score_limit", 25)
         self.time_left = msg.get("time_limit")
         self.remote = {}
+        from neon_shared import arena_layout as L
+        self.map = L.valid(msg.get("map", "grid"))
         cfg = {"mode": "online", "online": True, "session": self, "start": msg,
-               "score_limit": self.score_limit, "time_limit": 0}
+               "score_limit": self.score_limit, "time_limit": 0, "map": self.map}
         self.app.start_match(cfg)
         self.match = self.app.match
 

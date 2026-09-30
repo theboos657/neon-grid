@@ -26,6 +26,7 @@ FPS_CAPS = [0, 60, 120, 144, 165, 240]
 TIME_LIMITS = [0, 5, 8, 10, 15, 20]
 SCORE_LIMITS = [10, 15, 20, 25, 30, 40, 50]
 MODES = ["ffa", "duel", "team", "coop", "endless"]
+MAPS = ["grid", "forest", "backrooms", "random"]
 DIFFS = ["easy", "normal", "hard", "nightmare"]
 
 
@@ -286,9 +287,19 @@ class Menus:
         # mode list
         mx = T.mx(-ar + 0.55)
         self.mode_btns = []
-        desc = self.ui.label(self.root, "", (mx, -0.25), 0.036, T.GREY, T.ui_align("left"),
-                             wordwrap=18)
+        desc = self.ui.label(self.root, "", (mx, -0.2), 0.034, T.GREY, T.ui_align("left"),
+                             wordwrap=21)
         desc.setX(mx - 0.38 if not rtl else mx + 0.38)
+        if cfg.get("map") not in MAPS:
+            cfg["map"] = "grid"
+
+        def describe():
+            s = i18n.raw("desc_" + cfg["mode"]) + "\n\n" + i18n.raw("opt_map") + ": " + \
+                i18n.raw("map_" + cfg["map"]) + "\n" + i18n.raw("mapdesc_" + cfg["map"])
+            if rtl:
+                s = i18n.visual("\n".join(i18n.wrap(part, 34) if part else ""
+                                          for part in s.split("\n")))
+            T.set_text(desc, s)
 
         def pick(m):
             cfg["mode"] = m
@@ -300,13 +311,20 @@ class Menus:
                            (mx, 0.55 - i * 0.11), lambda m=m: pick(m), 0.78, 0.09, 0.048,
                            align=T.ui_align("left"), font=self.ui.dfont,
                            color=(0.05, 0.3, 0.35, 0.95) if active else None)
-        T.set_text(desc, i18n.t("desc_" + cfg["mode"], _wrap=34))
+        describe()
         # options
         ox = T.mx(0.55)
         f = self.ui.frame(self.root, ox - 0.75, ox + 0.75, -0.62, 0.66)
         self.ui.label(f, i18n.t("match_options"), (ox, 0.58), 0.045, T.CYAN, "center")
         y = 0.46
         mode = cfg["mode"]
+
+        def set_map(i):
+            cfg["map"] = MAPS[i]
+            describe()
+        self.ui.selector(f, i18n.t("opt_map"), [i18n.t("map_" + m) for m in MAPS],
+                         MAPS.index(cfg["map"]), (ox, y), set_map)
+        y -= 0.1
         if mode in ("ffa",):
             opts = [str(n) for n in range(1, 8)]
             self.ui.selector(f, i18n.t("opt_bots"), opts, max(0, min(6, cfg["bots"] - 1)), (ox, y),
@@ -350,6 +368,9 @@ class Menus:
             c = dict(cfg)
             if c["mode"] == "duel" and c["score_limit"] > 20:
                 c["score_limit"] = 10
+            if c["map"] == "random":
+                import random
+                c["map"] = random.choice(MAPS[:-1])
             self.app.start_match(c)
         self.ui.button(self.root, i18n.t("start"), (ox, -0.76), start, 0.7, 0.11, 0.065,
                        font=self.ui.dfont, color=(0.05, 0.35, 0.4, 0.95))
@@ -457,8 +478,9 @@ class Menus:
             status += "   " + i18n.t("mp_rooms_relay_down", addr=br.relay)
         self.ui.label(self.root, status, (0, 0.68), 0.032, T.GOLD, "center", wordwrap=70)
         # column headers
-        cols = [(-1.3, "rb_code", "left"), (-0.85, "rb_host", "left"), (-0.1, "rb_players", "center"),
-                (0.3, "rb_state", "center"), (0.72, "rb_source", "center")]
+        cols = [(-1.3, "rb_code", "left"), (-0.92, "rb_host", "left"),
+                (-0.32, "rb_players", "center"), (0.06, "opt_map", "center"),
+                (0.44, "rb_state", "center"), (0.8, "rb_source", "center")]
         for x, key, al in cols:
             xx = -x if rtl else x
             self.ui.label(self.root, i18n.t(key), (xx, 0.57), 0.03, T.CYAN, T.ui_align(al))
@@ -470,10 +492,11 @@ class Menus:
             full = r["players"] >= r["max"]
             T.card(cv, -1.4, 1.33, y - 0.042, y + 0.042, T.PANEL if i % 2 else (0.03, 0.09, 0.11, 0.85))
             vals = [r["code"], r["host"], "%d / %d" % (r["players"], r["max"]),
+                    i18n.t("map_" + (r.get("map") if r.get("map") in MAPS else "grid")),
                     i18n.t("rb_lobby") if r["state"] == "lobby" else i18n.t("rb_playing"),
                     ("LAN" if r["source"] == "lan" else i18n.t("rb_online")) +
                     ("  %dms" % r["ping"] if r.get("ping") is not None else "")]
-            colors = [T.CYAN, T.WHITE, T.RED if full else T.WHITE,
+            colors = [T.CYAN, T.WHITE, T.RED if full else T.WHITE, T.GOLD,
                       T.GREEN if r["state"] == "lobby" else T.ORANGE, T.GREY]
             for (x, _, al), v, col in zip(cols, vals, colors):
                 xx = -x if rtl else x
@@ -516,6 +539,7 @@ class Menus:
         self.lobby_frame = f
         self.lobby_code = self.ui.label(f, "", (0, 0.45), 0.08, T.CYAN, "center", self.ui.dfont)
         self.lobby_status = self.ui.label(f, "", (0, 0.35), 0.031, T.GOLD, "center", wordwrap=52)
+        self.lobby_info = self.ui.label(f, "", (0, 0.235), 0.036, T.CYAN, "center")
         self.ui.label(f, i18n.t("mp_players"), (0, 0.13), 0.04, T.GREY, "center")
         self.lobby_list = [self.ui.label(f, "", (0, 0.06 - i * 0.055), 0.04, T.WHITE, "center")
                            for i in range(8)]
@@ -540,6 +564,19 @@ class Menus:
         self.lobby_addr_btn = self.ui.button(f, i18n.t("mp_show_addr"), (0.6, 0.55), toggle_addr,
                                              0.42, 0.06, 0.03)
         self.lobby_addr_btn.hide()
+
+        def next_map():
+            net = self.app.net
+            if net is None:
+                return
+            if not net.map_supported:
+                self.toast(i18n.t("mp_map_old_server"), 4.0)
+                return
+            maps = MAPS[:-1]
+            net.set_map(maps[(maps.index(net.map) + 1) % len(maps)] if net.map in maps else "grid")
+        self.lobby_map_btn = self.ui.button(f, "", (-0.6, 0.55), next_map, 0.46, 0.06, 0.03,
+                                            color=(0.35, 0.28, 0.05, 0.95))
+        self.lobby_map_btn.hide()
         self.ui.button(self.root, i18n.t("mp_leave"), (T.mx(-self.app.getAspectRatio() + 0.35), -0.88),
                        leave, 0.45, sound="ui_back")
         self.lobby_sig = None
@@ -550,7 +587,7 @@ class Menus:
         if net is None or self.current != "lobby":
             return
         sig = (net.code, net.status, net.error, tuple(net.lobby_players), net.is_host,
-               self.lobby_show_addr)
+               self.lobby_show_addr, net.map)
         if sig == self.lobby_sig:
             return
         self.lobby_sig = sig
@@ -564,8 +601,14 @@ class Menus:
             T.set_text(lbl, net.lobby_players[i] if i < len(net.lobby_players) else "")
         if net.is_host and net.code:
             self.lobby_start.show()
+            self.lobby_map_btn.show()
+            self.lobby_map_btn["text"] = i18n.t("mp_map_btn", map=i18n.raw("map_" + net.map))
         else:
             self.lobby_start.hide()
+            self.lobby_map_btn.hide()
+        T.set_text(self.lobby_info, i18n.t("mp_room_info", mode=i18n.raw("mode_online"),
+                                           map=i18n.raw("map_" + net.map), n=net.score_limit)
+                   if net.code else "")
         local = getattr(net, "hosted_locally", False) and net.is_host and net.code
         if local:
             self.lobby_addr_btn.show()

@@ -153,12 +153,17 @@ class NeonGridApp:
             self.clock.setMode(ClockObject.MNormal)
 
     def get_nav(self, coll):
+        """Navigation graphs are expensive to build, so keep one per map."""
+        from neon_shared import arena_layout as L
         if self.nav_graph is None:
+            self.nav_graph = {}
+        nav = self.nav_graph.get(L.CURRENT)
+        if nav is None:
             from .entities.nav import NavGraph
-            self.nav_graph = NavGraph(coll)
+            nav = self.nav_graph[L.CURRENT] = NavGraph(coll)
         else:
-            self.nav_graph.coll = coll
-        return self.nav_graph
+            nav.coll = coll
+        return nav
 
     def menus_open(self):
         return self.paused or (self.debug is not None and self.debug.visible)
@@ -384,6 +389,7 @@ class NeonGridApp:
         from .net.session import NetSession
         self.state = "menu"
         self.net = NetSession(self)
+        self.storage.profile["last_mode"]["map"] = self.args.get("map") or "grid"   # read-only run
         self.net.host_lan()
         self.args["autotest"] = {"mode": "online"}      # enables screenshots/duration
         self._nt_started = False

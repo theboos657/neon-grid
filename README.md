@@ -86,9 +86,32 @@ are missing.
 - **Modifiers (any mode):** **Lives** (limited lives, last one standing wins) and
   **Chaos** (sweeping lasers, proximity mines, low-gravity lift zones).
 - **Multiplayer:** see below.
+- **Match briefing:** when a match starts (offline START or the host's START MATCH), a
+  panel shows the mode, the map, the objective (score and time limits, lives, chaos) and a
+  "where to go" tip for that map while the countdown runs.
 - **Story:** the menu button calls a clean plug-in hook (`game/story/__init__.py`). Ship a
   `neongrid_story` package with `launch(app)` and it takes over. Until then the button
   shows a "coming soon" panel.
+
+## Maps
+
+Pick the map under **Play → Match options → MAP** (or RANDOM). Online, the host changes it
+with the **MAP** button in the lobby.
+
+- **The Grid.** The neon arena: centre platform, catwalks reached by jump pads, sliding
+  walls, a wet reflective floor and the day/night neon cycle.
+- **Forest.** Open woods in daylight that slowly turns to dusk (fireflies come out). A log
+  cabin with a rooftop deck and two wooden watchtowers, both reached by jump pads. Boulders,
+  fallen logs, a campfire and dozens of trees. Bushes have no collision, so you can crouch
+  inside them to hide.
+- **Backrooms.** An 8 x 8 maze of yellow-wallpapered office rooms under a low ceiling of
+  buzzing, sometimes flickering fluorescent lights. The rooms are full of junk: parked police
+  cars with flashing light bars, dining tables and chairs, office desks with CRT monitors,
+  filing cabinets, couches and TVs, vending machines, arcade cabinets, traffic cones,
+  barrels, shopping carts, a phone booth and a giant rubber duck.
+
+All maps are generated from fixed seeds (`neon_shared/maps/`), so every player and the
+server build exactly the same collision.
 
 ## Weapons, abilities and progression
 
@@ -161,7 +184,7 @@ Every threat warns you before it attacks:
 The host creates a **4-letter room code**. Friends can join with that code, or open
 **Multiplayer → FIND ROOMS**. The room finder lists every open room on your local network
 (found automatically) and on the relay server, with host, player count, lobby or in-match
-status, and ping. Click JOIN on any room; no code needed. The list refreshes every
+status, map and ping. Click JOIN on any room; no code needed. The list refreshes every
 3 seconds. If the relay server can't be reached, **Host Online** hosts the room on your own
 PC instead.
 

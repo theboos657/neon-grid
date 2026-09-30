@@ -23,7 +23,7 @@ from .entities.visuals import CharacterVisual
 from .gfx import shaders
 from .gfx.effects import Effects
 from .gfx.lighting import LightRig
-from .world.arena import ArenaVisuals
+from .world import map_visuals
 from .world.collision import Body, CollisionWorld
 from .world.hazards import HazardManager
 from .world.interactables import Interactables
@@ -135,18 +135,22 @@ class Match:
         self.overlay_root = self.render.attachNewNode("overlay")
         max_lights = 8 if quality == "high" else 4
         self.lights = LightRig(self.render, max_lights)
+        # the map must be current before collision, navigation and visuals are built
+        self.map_id = "grid" if showcase else L.valid(config.get("map", "grid"))
+        L.load(self.map_id)
         self.coll = CollisionWorld()
         self.audio = app.audio
         self.fx = Effects(self.world_root, self.lights, quality, self.audio)
         self.fx.set_screen_height(app.win.getYSize() if app.win else 900)
-        self.arena = ArenaVisuals(self.render, self.world_root, self.textures, self.lights,
-                                  quality, self.font,
-                                  app.storage.settings["video"]["reflections"])
+        self.arena = map_visuals.create(self.render, self.world_root, self.textures, self.lights,
+                                        quality, self.font,
+                                        app.storage.settings["video"]["reflections"])
         self.nav = app.get_nav(self.coll)
         self.time = 0.0
         self.frozen = True
         self.state = "countdown"
-        self.state_t = 3.2 if not showcase else 0.0
+        # long enough to read the briefing (mode, map, objective); 3-2-1 plays at the end
+        self.state_t = 0.0 if showcase else (4.5 if self.online else 5.5)
         self.combatants = []
         self.decoys = []
         self.wells = []
@@ -169,6 +173,9 @@ class Match:
         self.projectiles = ProjectileManager(self)
         self.viewmodel = ViewModel(app.postfx.vm_root, self.textures, self.lights)
         self.viewmodel.set_scope_view(app.scope)
+        vm_amb = {"forest": Vec3(0.75, 0.72, 0.62), "backrooms": Vec3(0.72, 0.64, 0.42)}
+        self.viewmodel.anchor.setShaderInput("u_ambient", vm_amb.get(self.map_id,
+                                                                     Vec3(0.55, 0.62, 0.7)))
         from .gfx import geom as _geom
         from .gfx.effects import fx_node as _fx_node
         self.laser_np = _geom.beam_mesh()

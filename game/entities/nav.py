@@ -38,7 +38,7 @@ class NavGraph:
 
     def _walkable(self, x, y, z):
         """Can a body stand at (x, y) with feet at z?"""
-        for b in self.coll.static:
+        for b in self.coll.nearby(x, y, BODY_R + 0.05):
             if b[5] <= z + STEP_HEIGHT or b[2] >= z + STAND_HEIGHT:
                 continue
             if _circle_rect(x, y, BODY_R, b):
@@ -46,13 +46,14 @@ class NavGraph:
         return True
 
     def _build(self):
-        boxes = self.coll.static
+        # tree trunks and tall pillars are not places to stand on
+        top_limit = min(L.CEILING_Z - 2, 7.0)
         for ix in range(N):
             for iy in range(N):
                 x, y = cell_center(ix, iy)
                 cand = {0.0}
-                for b in boxes:
-                    if b[0] <= x <= b[3] and b[1] <= y <= b[4] and b[5] < L.CEILING_Z - 2:
+                for b in self.coll.nearby(x, y, 0.01):
+                    if b[0] <= x <= b[3] and b[1] <= y <= b[4] and b[5] < top_limit:
                         cand.add(round(b[5], 2))
                 lv = []
                 for z in sorted(cand):

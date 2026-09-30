@@ -93,7 +93,43 @@ def main():
     # respawn arrives after 3 s
     rs = b.wait("respawn", 5.0, lambda m: m["id"] == idb)
     print("respawn:", rs)
+    maps()
     print("ALL SERVER TESTS PASSED")
+
+
+def maps():
+    """Room maps: chosen at create, changed by the host in the lobby, sent with start."""
+    from neon_shared import arena_layout as L
+    h = Client("Host", {"primary": "needle", "secondary": "vx9", "melee": "katana"})
+    g = Client("Guest", {"primary": "ar7", "secondary": "vx9", "melee": "katana"})
+    h.wait("welcome")
+    g.wait("welcome")
+    h.send({"t": "create", "config": {"time_limit": 5, "score_limit": 3, "map": "forest"}})
+    room = h.wait("room")
+    assert room["map"] == "forest", room
+    g.send({"t": "join", "code": room["code"]})
+    assert g.wait("room")["map"] == "forest"
+    h.wait("room")
+    g.send({"t": "map", "map": "backrooms"})                 # guests cannot change it
+    h.send({"t": "map", "map": "nonsense"})                  # unknown -> THE GRID
+    assert g.wait("room")["map"] == "grid"
+    h.wait("room")
+    h.send({"t": "map", "map": "backrooms"})
+    assert g.wait("room")["map"] == "backrooms"
+    h.wait("room")
+    g.send({"t": "list"})
+    listed = [r for r in g.wait("rooms")["rooms"] if r["code"] == room["code"]]
+    assert listed and listed[0]["map"] == "backrooms", listed
+    h.send({"t": "start"})
+    st = g.wait("start")
+    assert st["map"] == "backrooms", st
+    spawns = {(x, y) for (x, y, _) in L.get("backrooms").SPAWNS}
+    for sp in st["spawns"].values():
+        assert (sp[0], sp[1]) in spawns, sp
+    h.send({"t": "map", "map": "grid"})                      # locked once live
+    time.sleep(0.3)
+    assert not [m for m in g.msgs if m["t"] == "room" and m.get("map") == "grid"]
+    print("maps: create/change/list/start OK (backrooms spawns)")
 
 
 if __name__ == "__main__":

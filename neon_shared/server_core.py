@@ -39,7 +39,6 @@ SPEED_BUDGET_MAX = 14.0       # burst metres (dash is 8 m)
 MAX_REWIND = 0.35
 RESPAWN_DELAY = 3.0
 VIOLATION_KICK = 10
-STATIC = [b for b in L.STATIC_BOXES]
 
 
 class Player:
@@ -110,6 +109,11 @@ class Room:
         self.time_limit = 8 * 60
         self.score_limit = 25
         self.start_time = 0.0
+        self.set_map("grid")
+
+    def set_map(self, map_id):
+        self.layout = L.get(L.valid(map_id))
+        self.map = self.layout.map_id
 
     def broadcast(self, msg, exclude=None):
         for p in self.players.values():
@@ -119,7 +123,9 @@ class Room:
     def lobby_msg(self):
         return {"t": "room", "code": self.code, "host": self.host,
                 "players": [{"id": p.id, "name": p.name, "skin": p.skin}
-                            for p in self.players.values()], "state": self.state}
+                            for p in self.players.values()], "state": self.state,
+                "map": self.map, "mode": "ffa", "score_limit": self.score_limit,
+                "time_limit": self.time_limit}
 
 
 class GameServer:
@@ -238,6 +244,7 @@ class GameServer:
             room.score_limit = max(5, min(100, int(cfg.get("score_limit", 25))))
         except (TypeError, ValueError):
             pass
+        room.set_map(str(cfg.get("map", "grid")))
         self.rooms[room.code] = room
         room.players[p.id] = p
         p.room = room
@@ -261,6 +268,14 @@ class GameServer:
             # join in progress
             self._send_start(room, only=p)
             self._respawn(room, p)
+
+    def _on_map(self, p, m):
+        """Host picks the map while the room is still in the lobby."""
+        room = p.room
+        if room is None or room.host != p.id or room.state == "live":
+            return
+        room.set_map(str(m.get("map", "grid")))
+        room.broadcast(room.lobby_msg())
 
     def _on_start(self, p, m):
         room = p.room
@@ -291,7 +306,7 @@ class GameServer:
             q.yaw = yaw
             spawns[str(q.id)] = [x, y, 0.0, yaw]
         msg = {"t": "start", "spawns": spawns, "time_limit": room.time_limit,
-               "score_limit": room.score_limit,
+               "score_limit": room.score_limit, "map": room.map, "mode": "ffa",
                "players": [{"id": q.id, "name": q.name, "skin": q.skin, "w": list(q.weapons)}
                            for q in room.players.values()]}
         if only is not None:
@@ -326,7 +341,8 @@ class GameServer:
             host = r.players.get(r.host)
             rooms.append({"code": r.code, "host": host.name if host else "?",
                           "players": len(r.players), "max": P.MAX_PLAYERS, "state": r.state,
-                          "score_limit": r.score_limit, "time_limit": r.time_limit})
+                          "score_limit": r.score_limit, "time_limit": r.time_limit,
+                          "map": r.map})
         p.send({"t": "rooms", "rooms": rooms})
 
     def _on_rtt(self, p, m):
@@ -349,8 +365,9 @@ class GameServer:
         ok = True
         if dh > p.budget + 1.0:
             ok = False
-        if abs(new[0]) > L.HALF + 0.5 or abs(new[1]) > L.HALF + 0.5 or \
-                new[2] < -1.0 or new[2] > L.CEILING_Z:
+        lay = room.layout
+        if abs(new[0]) > lay.HALF + 0.5 or abs(new[1]) > lay.HALF + 0.5 or \
+                new[2] < -1.0 or new[2] > lay.CEILING_Z:
             ok = False
         if not ok:
             self._violation(p, "speed/bounds")
@@ -445,7 +462,7 @@ class GameServer:
                        exclude=p)
 
     def _trace(self, room, shooter, o, d, s, t):
-        t_wall, _ = first_static_hit(o, d, STATIC, s["maxr"])
+        t_wall, _ = first_static_hit(o, d, room.layout.STATIC_BOXES, s["maxr"])
         limit = t_wall if t_wall is not None else s["maxr"]
         hits = []
         for q in room.players.values():
@@ -533,7 +550,8 @@ class GameServer:
             cosang = (v[0] * d[0] + v[1] * d[1] + v[2] * d[2]) / dist
             if math.acos(max(-1.0, min(1.0, cosang))) > half and dist > 0.9:
                 continue
-            tw, _ = first_static_hit(o, (v[0] / dist, v[1] / dist, v[2] / dist), STATIC, dist)
+            tw, _ = first_static_hit(o, (v[0] / dist, v[1] / dist, v[2] / dist),
+                                     room.layout.STATIC_BOXES, dist)
             if tw is not None:
                 continue
             self._damage(room, p, q, s["dmg"], s["name"], False)
@@ -577,7 +595,7 @@ class GameServer:
     def _spawn_point(self, room, p):
         best = None
         best_d = -1.0
-        pts = list(L.SPAWNS)
+        pts = list(room.layout.SPAWNS)
         self.rng.shuffle(pts)
         for (x, y, yaw) in pts:
             d = min([math.hypot(q.pos[0] - x, q.pos[1] - y) for q in room.players.values()

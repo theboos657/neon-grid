@@ -1,4 +1,4 @@
 {
   "_comment": "default_server: the relay every player uses unless they change it in Multiplayer. Examples: wss://neongrid-relay-xxxx.onrender.com  or  203.0.113.5:47777. Leave empty to host on your own PC.",
-  "default_server": ""
+  "default_server": "wss://neon-grid-o42w.onrender.com"
 }

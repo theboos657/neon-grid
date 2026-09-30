@@ -35,6 +35,7 @@ def parse_args(argv):
     ap.add_argument("--difficulty", default="normal",
                     choices=["easy", "normal", "hard", "nightmare"])
     ap.add_argument("--ads", action="store_true", help="test hook: hold aim-down-sights")
+    ap.add_argument("--map", default="grid", choices=["grid", "forest", "backrooms"])
     ap.add_argument("--chaos", action="store_true")
     ap.add_argument("--lives", action="store_true")
     ap.add_argument("--lang", choices=["en", "he"])
@@ -50,11 +51,12 @@ def main(argv=None):
             "shot_interval": args.shot_interval, "menutest": args.menutest,
             "nettest": args.nettest, "weapon": args.weapon,
             "endat": args.endat, "mods": args.mods, "fxtest": args.fxtest, "quality": args.quality,
-            "lang": args.lang, "ads": args.ads}
+            "lang": args.lang, "ads": args.ads, "map": args.map}
     mode = args.autotest or args.mode
     if mode:
         cfg = {"mode": mode, "bots": 5, "difficulty": args.difficulty, "lives": args.lives,
-               "lives_count": 3, "chaos": args.chaos, "time_limit": 8, "score_limit": 25}
+               "lives_count": 3, "chaos": args.chaos, "time_limit": 8, "score_limit": 25,
+               "map": args.map}
         opts["autotest" if args.autotest else "start"] = cfg
         if args.mode and not args.autotest:
             opts["autotest"] = None
