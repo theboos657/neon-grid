@@ -232,4 +232,5 @@ def build():
         "TRAP_SPOTS": at(TRAP_ROOMS), "DRONE_SPAWNS": at([(1, 1), (6, 6), (3, 4)], 2.1),
         "GRAVITY_ZONES": at([(2, 4), (5, 3)], 2.4), "LASER_SWEEPERS": at([(3, 2), (4, 5)], 3.2),
         "MINE_FIELD": at(MINE_ROOMS), "HOLO_SIGNS": [], "DECOR": decor, "THEME": theme,
+        "HEAL_SPOTS": at([(2, 1), (5, 6), (1, 4), (6, 3), (3, 7), (4, 0)]),
     }

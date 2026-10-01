@@ -527,6 +527,84 @@ STRINGS["he"].update({
 })
 
 
+STRINGS["en"].update({
+    "map_coral": "CORAL TOWN", "map_skyline": "SKYLINE", "map_range": "TRAINING RANGE",
+    "mapdesc_coral": "Underwater town: a pineapple house, a stone head, a rock house and a "
+                     "glass air dome. Hide in the kelp.",
+    "mapdesc_skyline": "Night rooftops 24 m up. Jump between skyscrapers, fight around the "
+                       "penthouse. Don't fall.",
+    "tip_coral": "The jump pads in front of the stone head launch you onto its top: the best "
+                 "sniper spot. The dome has two doors; the kelp hides you.",
+    "tip_skyline": "Bridges link the middle towers; the other gaps you jump. Corner pads launch "
+                   "you back up. Falling to the street kills you.",
+    "tip_range": "Shoot the targets at every distance. Stats are on the left; press ESC to leave.",
+})
+STRINGS["he"].update({
+    "map_coral": "עיר האלמוגים", "map_skyline": "קו הרקיע", "map_range": "מטווח אימונים",
+    "mapdesc_coral": "עיירה מתחת למים: בית אננס, ראש אבן, בית סלע וכיפת אוויר מזכוכית. "
+                     "הסתתרו באצות.",
+    "mapdesc_skyline": "גגות בלילה בגובה 24 מטר. קפצו בין גורדי שחקים והילחמו סביב הפנטהאוז. "
+                       "אל תיפלו.",
+    "tip_coral": "משטחי הקפיצה מול ראש האבן מעיפים אתכם לראש שלו: מקום הצליפה הטוב ביותר. "
+                 "לכיפה יש שתי דלתות, והאצות מסתירות אתכם.",
+    "tip_skyline": "גשרים מחברים את המגדלים האמצעיים; על השאר קופצים. משטחים בפינות מעיפים "
+                   "אתכם חזרה למעלה. נפילה לרחוב הורגת.",
+    "tip_range": "ירו במטרות בכל המרחקים. הנתונים משמאל; ESC ליציאה.",
+})
+
+
+STRINGS["en"].update({
+    "hk_title": "HACKS", "hk_close": "CLOSE",
+    "hk_note": "Only you, only this match. Nothing is saved. Offline only.",
+    "hk_online": "Hacks don't work online.",
+    "hk_fly": "Fly (Space up, Ctrl down)", "hk_noclip": "No clip (through walls)",
+    "hk_aimbot": "Aimbot (hold aim or fire)", "hk_god": "God mode", "hk_ammo": "Infinite ammo",
+    "hk_onehit": "One-hit kills", "hk_speed": "Super speed", "hk_esp": "See enemies through walls",
+    "hk_nocd": "No ability cooldowns", "hk_superjump": "Super jump", "hk_lowgrav": "Low gravity",
+})
+STRINGS["he"].update({
+    "hk_title": "האקים", "hk_close": "סגירה",
+    "hk_note": "רק עליכם, רק במשחק הזה. שום דבר לא נשמר. רק אופליין.",
+    "hk_online": "האקים לא עובדים אונליין.",
+    "hk_fly": "תעופה (רווח למעלה, Ctrl למטה)", "hk_noclip": "מעבר דרך קירות",
+    "hk_aimbot": "כוונת אוטומטית (החזיקו כיוון או ירי)", "hk_god": "בלתי פגיע",
+    "hk_ammo": "תחמושת אינסופית", "hk_onehit": "הריגה במכה אחת", "hk_speed": "מהירות על",
+    "hk_esp": "לראות אויבים דרך קירות", "hk_nocd": "בלי זמן טעינה ליכולות",
+    "hk_superjump": "קפיצת על", "hk_lowgrav": "כבידה נמוכה",
+})
+
+
+STRINGS["en"].update({"pickup_heal": "+{n} HEALTH"})
+STRINGS["he"].update({"pickup_heal": "+{n} בריאות"})
+
+
+STRINGS["en"].update({
+    "mode_training": "TRAINING", "desc_training": "A shooting range full of targets: still, "
+    "sliding, pop-up and strafing. Try any gun for free.",
+    "goal_training": "Hit the targets. Headshots count double in your stats.",
+    "tr_menu": "No enemies, no coins. Targets at 10-55 m. Press F in the range to try the next "
+               "gun in the game.",
+    "tr_down": "TARGET DOWN  {m} m", "tr_gun": "TRYING: {w}   (F = next gun)",
+    "tr_stats": "HITS {h}  |  ACCURACY {a}%  |  HEADSHOTS {hs}  |  TARGETS {d}",
+    "tr_react": "REACTION {s}s", "tr_hint": "F = NEXT GUN",
+})
+STRINGS["he"].update({
+    "mode_training": "אימונים", "desc_training": "מטווח מלא מטרות: עומדות, זזות, קופצות "
+    "ומתחמקות. נסו כל נשק בחינם.",
+    "goal_training": "פגעו במטרות. פגיעות ראש נספרות בנפרד.",
+    "tr_menu": "בלי אויבים ובלי מטבעות. מטרות במרחק 10-55 מטר. F במטווח מחליף לנשק הבא.",
+    "tr_down": "מטרה הופלה  {m} מ׳", "tr_gun": "מנסים: {w}   (F = הנשק הבא)",
+    "tr_stats": "פגיעות {h}  |  דיוק {a}%  |  ראש {hs}  |  מטרות {d}",
+    "tr_react": "תגובה {s} שנ׳", "tr_hint": "F = הנשק הבא",
+})
+
+
+STRINGS["en"].update({"mode_story": "STORY: LAST LIGHT",
+                      "goal_story": "Kill every Syndicate gunman, then their boss."})
+STRINGS["he"].update({"mode_story": "סיפור: האור האחרון",
+                      "goal_story": "חסלו את כל אנשי הסינדיקט ואז את הבוס שלהם."})
+
+
 def is_rtl():
     return _lang == "he"
 

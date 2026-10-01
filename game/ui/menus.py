@@ -25,8 +25,8 @@ RESOLUTIONS = [(1280, 720), (1366, 768), (1600, 900), (1920, 1080), (2560, 1440)
 FPS_CAPS = [0, 60, 120, 144, 165, 240]
 TIME_LIMITS = [0, 5, 8, 10, 15, 20]
 SCORE_LIMITS = [10, 15, 20, 25, 30, 40, 50]
-MODES = ["ffa", "duel", "team", "coop", "endless"]
-MAPS = ["grid", "forest", "backrooms", "random"]
+MODES = ["ffa", "duel", "team", "coop", "endless", "training"]
+MAPS = ["grid", "forest", "backrooms", "coral", "skyline", "random"]
 NET_MODES = ["ffa", "duel", "team", "coop"]
 DIFFS = ["easy", "normal", "hard", "nightmare"]
 
@@ -104,6 +104,10 @@ class Menus:
             self.app.audio.ui("ui_back")
             self.show("main")
             return True
+        if c == "story_scene":
+            self.app.audio.ui("ui_back")
+            self.show("story")
+            return True
         if c == "gunsmith":
             self.app.audio.ui("ui_back")
             self.gs_preview = {}
@@ -141,6 +145,8 @@ class Menus:
             self._lobby_poll()
         if self.current == "rooms":
             self._rooms_poll()
+        if self.current == "story_scene" and getattr(self, "scene_tick", None):
+            self.scene_tick(dt)
 
     # ================================================================== shared pieces
     def _backdrop(self, side=True):
@@ -323,53 +329,60 @@ class Menus:
         def set_map(i):
             cfg["map"] = MAPS[i]
             describe()
-        self.ui.selector(f, i18n.t("opt_map"), [i18n.t("map_" + m) for m in MAPS],
-                         MAPS.index(cfg["map"]), (ox, y), set_map)
+        if mode == "training":
+            self.ui.label(f, i18n.t("tr_menu", _wrap=50), (ox, y), 0.034, T.WHITE, "center",
+                          wordwrap=40)
+        else:
+            self.ui.selector(f, i18n.t("opt_map"), [i18n.t("map_" + m) for m in MAPS],
+                             MAPS.index(cfg["map"]), (ox, y), set_map)
         y -= 0.1
-        if mode == "team":
-            sizes = [1, 2, 3, 4, 5]
-            cur = cfg.get("team_size", 4)
-            self.ui.selector(f, i18n.t("opt_team_size"), ["%dv%d" % (n, n) for n in sizes],
-                             sizes.index(cur) if cur in sizes else 3, (ox, y),
-                             lambda i: cfg.__setitem__("team_size", sizes[i]))
+        if mode != "training":          # the range has no bots, limits or modifiers
+            if mode == "team":
+                sizes = [1, 2, 3, 4, 5]
+                cur = cfg.get("team_size", 4)
+                self.ui.selector(f, i18n.t("opt_team_size"), ["%dv%d" % (n, n) for n in sizes],
+                                 sizes.index(cur) if cur in sizes else 3, (ox, y),
+                                 lambda i: cfg.__setitem__("team_size", sizes[i]))
+                y -= 0.1
+            if mode in ("ffa",):
+                opts = [str(n) for n in range(1, 8)]
+                self.ui.selector(f, i18n.t("opt_bots"), opts, max(0, min(6, cfg["bots"] - 1)),
+                                 (ox, y), lambda i: cfg.__setitem__("bots", i + 1))
+                y -= 0.1
+            from ..entities.bot import COIN_MULT
+            dopts = ["%s   %sx \u00a2" % (i18n.t("diff_" + d), ("%g" % COIN_MULT[d]))
+                     for d in DIFFS]
+            if cfg["difficulty"] not in DIFFS:
+                cfg["difficulty"] = "normal"
+            self.ui.selector(f, i18n.t("opt_difficulty"), dopts, DIFFS.index(cfg["difficulty"]),
+                             (ox, y), lambda i: cfg.__setitem__("difficulty", DIFFS[i]))
             y -= 0.1
-        if mode in ("ffa",):
-            opts = [str(n) for n in range(1, 8)]
-            self.ui.selector(f, i18n.t("opt_bots"), opts, max(0, min(6, cfg["bots"] - 1)), (ox, y),
-                             lambda i: cfg.__setitem__("bots", i + 1))
+            if mode in ("ffa", "duel", "team"):
+                topts = [i18n.t("unlimited") if n == 0 else i18n.t("minutes", n=n)
+                         for n in TIME_LIMITS]
+                ti = TIME_LIMITS.index(cfg["time_limit"]) if cfg["time_limit"] in TIME_LIMITS else 2
+                self.ui.selector(f, i18n.t("opt_time"), topts, ti, (ox, y),
+                                 lambda i: cfg.__setitem__("time_limit", TIME_LIMITS[i]))
+                y -= 0.1
+                sopts = [str(n) for n in SCORE_LIMITS]
+                si = SCORE_LIMITS.index(cfg["score_limit"]) \
+                    if cfg["score_limit"] in SCORE_LIMITS else 3
+                self.ui.selector(f, i18n.t("opt_score"), sopts, si, (ox, y),
+                                 lambda i: cfg.__setitem__("score_limit", SCORE_LIMITS[i]))
+                y -= 0.1
+            self.ui.toggle(f, i18n.t("opt_lives"), cfg["lives"], (ox, y),
+                           lambda v: cfg.__setitem__("lives", v))
             y -= 0.1
-        from ..entities.bot import COIN_MULT
-        dopts = ["%s   %sx \u00a2" % (i18n.t("diff_" + d), ("%g" % COIN_MULT[d]))
-                 for d in DIFFS]
-        if cfg["difficulty"] not in DIFFS:
-            cfg["difficulty"] = "normal"
-        self.ui.selector(f, i18n.t("opt_difficulty"), dopts, DIFFS.index(cfg["difficulty"]),
-                         (ox, y), lambda i: cfg.__setitem__("difficulty", DIFFS[i]))
-        y -= 0.1
-        if mode in ("ffa", "duel", "team"):
-            topts = [i18n.t("unlimited") if n == 0 else i18n.t("minutes", n=n) for n in TIME_LIMITS]
-            ti = TIME_LIMITS.index(cfg["time_limit"]) if cfg["time_limit"] in TIME_LIMITS else 2
-            self.ui.selector(f, i18n.t("opt_time"), topts, ti, (ox, y),
-                             lambda i: cfg.__setitem__("time_limit", TIME_LIMITS[i]))
-            y -= 0.1
-            sopts = [str(n) for n in SCORE_LIMITS]
-            si = SCORE_LIMITS.index(cfg["score_limit"]) if cfg["score_limit"] in SCORE_LIMITS else 3
-            self.ui.selector(f, i18n.t("opt_score"), sopts, si, (ox, y),
-                             lambda i: cfg.__setitem__("score_limit", SCORE_LIMITS[i]))
-            y -= 0.1
-        self.ui.toggle(f, i18n.t("opt_lives"), cfg["lives"], (ox, y),
-                       lambda v: cfg.__setitem__("lives", v))
-        y -= 0.1
-        lopts = [str(n) for n in range(1, 10)]
-        self.ui.selector(f, i18n.t("opt_lives_count"), lopts, max(0, cfg["lives_count"] - 1),
-                         (ox, y), lambda i: cfg.__setitem__("lives_count", i + 1))
-        y -= 0.07
-        self.ui.label(f, i18n.t("lives_hint"), (ox, y), 0.028, T.GREY, "center")
-        y -= 0.09
-        self.ui.toggle(f, i18n.t("opt_chaos"), cfg["chaos"], (ox, y),
-                       lambda v: cfg.__setitem__("chaos", v))
-        y -= 0.07
-        self.ui.label(f, i18n.t("chaos_hint"), (ox, y), 0.028, T.GREY, "center")
+            lopts = [str(n) for n in range(1, 10)]
+            self.ui.selector(f, i18n.t("opt_lives_count"), lopts, max(0, cfg["lives_count"] - 1),
+                             (ox, y), lambda i: cfg.__setitem__("lives_count", i + 1))
+            y -= 0.07
+            self.ui.label(f, i18n.t("lives_hint"), (ox, y), 0.028, T.GREY, "center")
+            y -= 0.09
+            self.ui.toggle(f, i18n.t("opt_chaos"), cfg["chaos"], (ox, y),
+                           lambda v: cfg.__setitem__("chaos", v))
+            y -= 0.07
+            self.ui.label(f, i18n.t("chaos_hint"), (ox, y), 0.028, T.GREY, "center")
 
         def start():
             prof.save()
@@ -379,21 +392,23 @@ class Menus:
             if c["map"] == "random":
                 import random
                 c["map"] = random.choice(MAPS[:-1])
+            if c["mode"] == "training":
+                c["map"] = "range"
             self.app.start_match(c)
         self.ui.button(self.root, i18n.t("start"), (ox, -0.76), start, 0.7, 0.11, 0.065,
                        font=self.ui.dfont, color=(0.05, 0.35, 0.4, 0.95))
         self._back_button()
 
     # ================================================================== story
-    def _build_story(self):
-        if story.launch(self.app):
+    def _build_story(self, sel=None):
+        if story.launch(self.app):          # an external story module still takes priority
             return
-        self._backdrop(False)
-        self._header("story_title")
-        f = self.ui.frame(self.root, -0.9, 0.9, -0.3, 0.3)
-        self.ui.label(f, i18n.t("story_soon", _wrap=60), (0, 0.05), 0.045, T.WHITE, "center",
-                      wordwrap=34)
-        self._back_button()
+        from . import story_screen
+        story_screen.build_menu(self, sel)
+
+    def _build_story_scene(self, chapter=0, part="intro"):
+        from . import story_screen
+        story_screen.build_scene(self, chapter, part)
 
     # ================================================================== multiplayer
     def _build_multiplayer(self, status=""):
@@ -1691,6 +1706,14 @@ class Menus:
                 i18n.raw("boost_" + b) for b in summary["boosts"])), T.GOLD))
         for i, (s, col) in enumerate(lines[:11]):
             self.ui.label(f, s, (0, 0.4 - i * 0.085), 0.045 if i < 3 else 0.036, col, "center")
-        self.ui.button(self.root, i18n.t("res_continue"), (0, -0.76),
-                       lambda: self.show("lobby" if self.app.net is not None else "main"), 0.7,
-                       0.1, 0.05)
+        st = summary.get("story")
+
+        def cont():
+            if st:
+                if st.get("won"):
+                    self.show("story_scene", chapter=st["chapter"], part="outro")
+                else:
+                    self.show("story", sel=st["chapter"])
+            else:
+                self.show("lobby" if self.app.net is not None else "main")
+        self.ui.button(self.root, i18n.t("res_continue"), (0, -0.76), cont, 0.7, 0.1, 0.05)

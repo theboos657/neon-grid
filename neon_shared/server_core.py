@@ -35,6 +35,7 @@ import time
 from . import arena_layout as L
 from . import protocol as P
 from . import gadgets as G
+from . import pickups as PK
 from .bots import BOT_NAMES, BOT_SKINS, LOADOUT_POOL
 from .hitmath import first_static_hit, hit_combatant, normalize
 from .weapons import BY_ID, damage_at, weapon_stats
@@ -48,7 +49,7 @@ RESPAWN_DELAY = 3.0
 VIOLATION_KICK = 10
 MODES = ("ffa", "duel", "team", "coop")
 DIFFICULTIES = ("easy", "normal", "hard", "nightmare")
-BOT_ACTIONS = ("st", "fire", "reload", "melee", "phit", "bomb", "boom", "drone", "dhit")
+BOT_ACTIONS = ("st", "fire", "reload", "melee", "phit", "bomb", "boom", "drone", "dhit", "heal")
 
 
 class Player:
@@ -149,6 +150,7 @@ class Room:
         self.bots = 0            # extra bots in ffa
         self.difficulty = "normal"
         self.team_score = [0, 0]
+        self.heal_ready = {}     # health pack index -> time it is available again
         self.set_map("grid")
 
     @property
@@ -436,6 +438,7 @@ class GameServer:
             return
         room.state = "live"
         room.start_time = time.monotonic()
+        room.heal_ready = {}
         self._setup_teams(room)
         for q in room.players.values():
             q.kills = q.deaths = q.score = 0
@@ -458,8 +461,8 @@ class GameServer:
         spawns = {}
         for q in room.players.values():
             if only is None or q is only:
-                x, y, yaw = self._spawn_point(room, q)
-                q.pos = (x, y, 0.0)
+                x, y, yaw, z = self._spawn_point(room, q)
+                q.pos = (x, y, z)
                 q.yaw = yaw
             spawns[str(q.id)] = [q.pos[0], q.pos[1], q.pos[2], q.yaw]
         msg = {"t": "start", "spawns": spawns, "time_limit": room.time_limit,
@@ -541,6 +544,9 @@ class GameServer:
             return
         p.budget -= dh
         p.pos = new
+        if lay.KILL_Z is not None and new[2] < lay.KILL_Z:
+            self._kill_env(room, p, "FALL")
+            return
         try:
             p.yaw = float(m.get("yaw", 0.0)) % 360.0
             p.pitch = max(-90.0, min(90.0, float(m.get("pitch", 0.0))))
@@ -723,6 +729,27 @@ class GameServer:
                 continue
             self._damage(room, p, q, s["dmg"], s["name"], False)
 
+    # ------------------------------------------------------------------ health packs
+    def _on_heal(self, p, m):
+        room = p.room
+        if room is None or room.state != "live" or not p.alive or p.hp >= 100.0:
+            return
+        i = m.get("i")
+        spots = room.layout.HEAL_SPOTS
+        if not isinstance(i, int) or not 0 <= i < len(spots):
+            return
+        now = time.monotonic()
+        if now < room.heal_ready.get(i, 0.0):
+            return
+        sp = spots[i]
+        z = sp[2] if len(sp) > 2 else 0.0
+        if math.hypot(p.pos[0] - sp[0], p.pos[1] - sp[1]) > PK.HEAL_RADIUS + 1.0 or \
+                abs(p.pos[2] - z) > 2.0:
+            return
+        room.heal_ready[i] = now + PK.HEAL_RESPAWN
+        p.hp = min(100.0, p.hp + PK.HEAL_AMOUNT)
+        room.broadcast({"t": "healed", "i": i, "id": p.id})
+
     # ------------------------------------------------------------------ hotbar gadgets
     def _on_bomb(self, p, m):
         room = p.room
@@ -825,6 +852,16 @@ class GameServer:
                     room.team_score[attacker.team] += 1
             room.broadcast({"t": "kill", "k": attacker.id, "v": victim.id, "w": wname, "hs": head})
 
+    def _kill_env(self, room, p, wname):
+        """Environment death (falling off a rooftop)."""
+        if not p.alive:
+            return
+        p.hp = 0.0
+        p.alive = False
+        p.deaths += 1
+        p.respawn_at = time.monotonic() + RESPAWN_DELAY
+        room.broadcast({"t": "kill", "k": p.id, "v": p.id, "w": wname, "hs": False})
+
     def _violation(self, p, what):
         now = time.monotonic()
         p.violations.append(now)
@@ -849,17 +886,18 @@ class GameServer:
             # each team spawns on its own half, like offline Team Battle
             pts = [s for s in pts if (p.team == 0) == (s[1] < 0)] or pts
         self.rng.shuffle(pts)
-        for (x, y, yaw) in pts:
+        for sp in pts:
+            x, y, yaw = sp[:3]
             d = min([math.hypot(q.pos[0] - x, q.pos[1] - y) for q in room.players.values()
                      if q is not p and q.alive] or [99.0])
             if d > best_d:
                 best_d = d
-                best = (x, y, yaw)
+                best = (x, y, yaw, L.spawn_z(sp))
         return best
 
     def _respawn(self, room, p, announce=True):
-        x, y, yaw = self._spawn_point(room, p)
-        p.pos = (x, y, 0.0)
+        x, y, yaw, z = self._spawn_point(room, p)
+        p.pos = (x, y, z)
         p.hp = 100.0
         p.alive = True
         p.respawn_at = time.monotonic()
@@ -869,7 +907,7 @@ class GameServer:
         p.reload_at.clear()
         p.bombs = G.BOMBS_PER_LIFE
         p.drone_until = 0.0
-        room.broadcast({"t": "respawn", "id": p.id, "p": [x, y, 0.0, yaw]})
+        room.broadcast({"t": "respawn", "id": p.id, "p": [x, y, z, yaw]})
 
     async def _tick_loop(self):
         interval = 1.0 / P.TICK_RATE
@@ -880,6 +918,10 @@ class GameServer:
                 if room.state != "live":
                     continue
                 left = room.time_limit - (now - room.start_time)
+                for i, t_ready in list(room.heal_ready.items()):
+                    if now >= t_ready:
+                        room.heal_ready.pop(i)
+                        room.broadcast({"t": "healed", "i": i, "ready": 1})
                 for p in room.players.values():
                     if not p.alive and now >= p.respawn_at and p.respawn_at > 0:
                         self._respawn(room, p)

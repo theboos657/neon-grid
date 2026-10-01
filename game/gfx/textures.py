@@ -246,6 +246,62 @@ def ceiling_tiles(size=128):
     v = np.where(edge, 0.55, v)
     return _gray("ceiling", v)
 
+def sand(size=256):
+    """Sea-floor sand with soft ripples, tiles every 4 m."""
+    rng = np.random.default_rng(31)
+    y, x = np.mgrid[0:size, 0:size]
+    n = fbm(size, 6, 4, rng)
+    ripple = 0.5 + 0.5 * np.sin((y + n * 40) * (np.pi * 2 * 10 / size))
+    grain = rng.random((size, size))
+    v = 0.7 + 0.12 * ripple + 0.1 * n + 0.08 * (grain - 0.5)
+    return _gray("sand", v)
+
+
+def pineapple(size=128):
+    """Diamond cross-hatch skin (tinted orange by vertex colour)."""
+    y, x = np.mgrid[0:size, 0:size]
+    a = np.abs(((x + y) % (size // 4)) - size / 8) < 2.2
+    b = np.abs(((x - y) % (size // 4)) - size / 8) < 2.2
+    n = fbm(size, 8, 3, np.random.default_rng(32))
+    v = 0.85 + 0.12 * n
+    v = np.where(a | b, 0.45, v)
+    return _gray("pineapple", v)
+
+
+def stone(size=128):
+    rng = np.random.default_rng(33)
+    n = fbm(size, 5, 5, rng)
+    pits = rng.random((size, size)) < 0.03
+    v = 0.55 + 0.4 * n
+    v = np.where(pits, v * 0.6, v)
+    return _gray("stone", v)
+
+
+def windows(size=256):
+    """Skyscraper facade: dark panels with a grid of windows, some lit warm or cool.
+    One tile = 6 m (4 x 8 windows)."""
+    rng = np.random.default_rng(34)
+    img = np.zeros((size, size, 4))
+    y, x = np.mgrid[0:size, 0:size]
+    cw, ch = size // 4, size // 8
+    wx = (x % cw) > cw * 0.18
+    wy = (y % ch) > ch * 0.25
+    win = wx & wy
+    lit = rng.random((8, 4))
+    warm = rng.random((8, 4)) < 0.6
+    ci = (y // ch).clip(0, 7)
+    cj = (x // cw).clip(0, 3)
+    on = lit[ci, cj] < 0.42
+    is_warm = warm[ci, cj]
+    base = 0.05 + 0.03 * fbm(size, 8, 2, rng)
+    for k, (wc, cc) in enumerate(((1.0, 0.45), (0.8, 0.8), (0.45, 1.0))):
+        lit_col = np.where(is_warm, wc, cc)
+        val = np.where(win & on, lit_col * 0.95, np.where(win, 0.09, base))
+        img[..., k] = val
+    img[..., 3] = 1
+    return _to_texture("windows", img)
+
+
 
 class TextureBank:
     """Create all procedural textures once."""
@@ -260,7 +316,8 @@ class TextureBank:
         self._lazy = {}
 
     _MAKERS = {"grass": grass, "bark": bark, "foliage": foliage, "wood": wood, "rock": rock,
-               "carpet": carpet, "wallpaper": wallpaper, "ceiling": ceiling_tiles}
+               "carpet": carpet, "wallpaper": wallpaper, "ceiling": ceiling_tiles, "sand": sand,
+               "pineapple": pineapple, "stone": stone, "windows": windows}
 
     def get(self, name):
         """Map textures are only generated the first time a map needs them."""

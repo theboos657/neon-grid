@@ -1,4 +1,4 @@
-"""Weapon catalogue: 20 ranged guns, 10 melee weapons and 5 upgrade tiers.
+"""Weapon catalogue: 21 ranged guns, 10 melee weapons and 5 upgrade tiers.
 
 Balance notes
 -------------
@@ -90,6 +90,10 @@ RANGED = [
     _w("viper", "Viper Semi", "sniper", dmg=62, rps=1.8, mag=8, reload=2.8, spread=0.1,
        range=100, maxr=220, falloff=0.85, hs=1.8, reserve=40, move=0.92, swap=0.6, recoil=4.0,
        zoom=0.4, sfx="sniper", scoped=True),
+    # one shot, one kill: 150 damage anywhere, but slow bolt action, 4 rounds, long reload
+    _w("executioner", "Executioner", "sniper", dmg=150, rps=0.55, mag=4, reload=3.6,
+       spread=0.03, range=250, maxr=300, falloff=1.0, hs=1.5, reserve=16, move=0.85, swap=0.9,
+       recoil=7.0, zoom=0.25, sfx="sniper", scoped=True, color=(1.0, 0.35, 0.3)),
     # ---- Plasma (projectiles) --------------------------------------------------
     _w("caster", "Plasma Caster", "plasma", dmg=26, rps=4.0, mag=20, reload=2.3, spread=0.6,
        speed=75, splash=1.6, splash_dmg=10, range=200, maxr=200, falloff=1.0, reserve=100,

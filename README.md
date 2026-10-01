@@ -90,9 +90,16 @@ are missing.
 - **Match briefing:** when a match starts (offline START or the host's START MATCH), a
   panel shows the mode, the map, the objective (score and time limits, lives, chaos) and a
   "where to go" tip for that map while the countdown runs.
-- **Story:** the menu button calls a clean plug-in hook (`game/story/__init__.py`). Ship a
-  `neongrid_story` package with `launch(app)` and it takes over. Until then the button
-  shows a "coming soon" panel.
+- **Training:** a neon shooting range with still, sliding, pop-up and strafing targets
+  from 10 to 55 m. The HUD tracks hits, accuracy, headshots and your pop-up reaction time.
+  Press **F** to try the next gun in the game for free. No enemies, no coins.
+- **Story - LAST LIGHT:** five chapters, one per map. You are Kade; the Null Syndicate
+  murdered your wife Lena and your daughter Mia, and you hunt down the people who did it.
+  Each mission has two waves of Syndicate gunmen and a named boss with extra health
+  (Brick, Rook, Mara Voss, Dutch and Silas Crane). Three lives per mission. Typewriter
+  cutscenes play before and after every chapter, and finishing a chapter unlocks the next
+  one and pays 500 coins the first time. (An external `neongrid_story` package with
+  `launch(app)` still overrides the built-in campaign.)
 
 ## Maps
 
@@ -110,6 +117,17 @@ with the **MAP** button in the lobby.
   cars with flashing light bars, dining tables and chairs, office desks with CRT monitors,
   filing cabinets, couches and TVs, vending machines, arcade cabinets, traffic cones,
   barrels, shopping carts, a phone booth and a giant rubber duck.
+- **Coral Town.** An underwater neighbourhood: a pineapple house, a stone tiki-head house
+  (jump pads put you on top: the best sniper spot), a rock house you can climb, a glass air
+  dome with a tree inside, a ship-hull diner, coral, kelp to hide in, light rays, bubbles
+  and jellyfish.
+- **Skyline.** Night rooftops 21-24 m above the city. Bridges link the middle towers; the
+  other gaps you jump. Jump pads on the corner roofs throw you back up, and a small house
+  stands on the centre tower. A plane circles overhead. Fall to the street and you die
+  (the server checks falls online too).
+
+Every map has **health packs** (green crosses, +50 health, back after 20 s); bots go for
+them when they are hurt.
 
 All maps are generated from fixed seeds (`neon_shared/maps/`), so every player and the
 server build exactly the same collision.
@@ -125,9 +143,18 @@ The hotbar above the ability icons shows slots 1-3 (weapons), **4 (bombs)** and 
 - Bots use both. Online, the server checks every blast and drone hit.
 - Name tags are hidden by walls, trees and props.
 
+## Hack menu (offline)
+
+During an offline match press **[** then **L** then **'** to open the hack menu: fly, no
+clip, aimbot, god mode, infinite ammo, one-hit kills, super speed, see enemies through walls,
+no ability cooldowns, super jump and low gravity. It only affects you, only for that match:
+nothing is saved and everything resets when the match ends. It does not open online.
+
 ## Weapons, abilities and progression
 
-- **20 guns**: 3 pistols, 3 SMGs, 4 rifles, 3 shotguns, 2 snipers, 3 plasma projectile
+- **21 guns**: 3 pistols, 3 SMGs, 4 rifles, 3 shotguns, 3 snipers (including the
+  **Executioner**: 150 damage, one hit kills, but a slow bolt, 4 rounds and a long reload;
+  2500 coins in the shop), 3 plasma projectile
   weapons, and 2 rail weapons that fire short, piercing laser pulses.
 - **10 melee weapons**: katana, shock baton, plasma axe, mono knife (backstab), laser
   whip, grav hammer (knockback), twin claws, photon spear, pulse fist and chain blade.
@@ -172,6 +199,12 @@ The hotbar above the ability icons shows slots 1-3 (weapons), **4 (bombs)** and 
 - **Battle pass.** Season 1 has 50 tiers driven by XP. The free track and the premium
   track hold weapon skins, suits, titles, coins and Upgrade Chips. The premium track is
   unlocked with in-game coins. **There are no real-money purchases.**
+- **Outfits.** Characters have bending knees and elbows, a running bounce and 17 outfits,
+  each with its own headpiece and back item: Grid Runner, Shadow Op (hood and cape), Field
+  Tech (cap), Neon Ronin (ninja mask and katana), Peel Agent (banana suit), Chomp Squad
+  (shark hood), Star Walker (astronaut), Bone Rider (skull), Iron Knight, Deep Pirate, Neon
+  Kitty (cat ears and wings) and more. Buy them in the Locker/Shop or unlock them in the
+  battle pass. Bots wear them too.
 - **Real scopes.** When you aim with a scope (sniper rifles, the Longbow, or the 2.5x and 8x
   optics), the gun comes up to your eye and a second camera renders the magnified arena
   into the scope lens, with a reticle. You still see the gun and the arena around it. If

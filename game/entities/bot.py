@@ -139,14 +139,20 @@ class BotBrain:
         c = self.c
         m = self.m
         rng = self.rng
+        if c.health < 55:
+            packs = [h for h in m.interact.heals if h.ready]
+            if packs:
+                h = min(packs, key=lambda h: (h.pos - c.body.pos).lengthSquared())
+                if (h.pos - c.body.pos).length() < 30:
+                    return (h.pos.x, h.pos.y, h.pos.z), "heal"
         if c.needs_loot():
             boxes = [b for b in m.interact.loot if b.ready]
             if boxes:
                 b = min(boxes, key=lambda b: (b.pos - c.body.pos).lengthSquared())
                 return (b.pos.x, b.pos.y, b.pos.z), "loot"
-        if c.energy < 40 and rng.random() < 0.5:
+        if c.energy < 40 and rng.random() < 0.5 and m.interact.ports:
             p = min(m.interact.ports, key=lambda p: (p.pos - c.body.pos).lengthSquared())
-            return (p.pos.x, p.pos.y, 0.0), "port"
+            return (p.pos.x, p.pos.y, p.pos.z), "port"
         if self.last_seen_pos is not None and m.time - self.last_seen_time < 8:
             p = self.last_seen_pos
             return (p.x, p.y, p.z), "hunt"

@@ -47,16 +47,19 @@ class NavGraph:
 
     def _build(self):
         # tree trunks and tall pillars are not places to stand on
-        top_limit = min(L.CEILING_Z - 2, 7.0)
+        top_limit = min(L.CEILING_Z - 2, L.NAV_TOP)
+        low = L.KILL_Z if L.KILL_Z is not None else -1.0
         for ix in range(N):
             for iy in range(N):
                 x, y = cell_center(ix, iy)
-                cand = {0.0}
+                cand = {0.0} if low < 0 else set()
                 for b in self.coll.nearby(x, y, 0.01):
                     if b[0] <= x <= b[3] and b[1] <= y <= b[4] and b[5] < top_limit:
                         cand.add(round(b[5], 2))
                 lv = []
                 for z in sorted(cand):
+                    if z < low:
+                        continue                 # the street far below a rooftop map
                     # the surface under the centre must actually be this z
                     g = self.coll.ground_height(x, y, 0.05, z + 0.01)
                     if abs(g - z) > 0.02:
@@ -89,8 +92,9 @@ class NavGraph:
                                 out.append(((ix + dx, iy + dy, lj), base + 1.5))  # drop down
                 self.edges[node] = out
         # jump pads
-        for (x, y, tx, ty, tz) in L.JUMP_PADS:
-            a = self.nearest_node(x, y, 0.0)
+        for pad in L.JUMP_PADS:
+            x, y, tx, ty, tz = pad[:5]
+            a = self.nearest_node(x, y, pad[5] if len(pad) > 5 else 0.0)
             b = self.nearest_node(tx, ty, tz)
             if a and b:
                 self.edges.setdefault(a, []).append((b, 6.0))

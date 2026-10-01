@@ -86,6 +86,7 @@ DEFAULT_PROFILE = {
                 "abilities": ["dash", "shield"]},
     "achievements": {},
     "challenges": {"date": "", "list": []},
+    "story_progress": 0,              # chapters of LAST LIGHT completed
     "last_mode": {"mode": "ffa", "bots": 5, "difficulty": "normal", "lives": False,
                   "lives_count": 3, "chaos": False, "time_limit": 8, "score_limit": 25},
 }

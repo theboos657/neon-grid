@@ -227,8 +227,9 @@ class Match:
         enemies = [e for e in self.combatants if e.alive and e is not c and self.hostile(c, e)]
         pts = list(L.SPAWNS)
         self.rng.shuffle(pts)
-        for (x, y, yaw) in pts:
-            p = Vec3(x, y, 0)
+        for sp in pts:
+            x, y, yaw = sp[:3]
+            p = Vec3(x, y, L.spawn_z(sp))
             if self.mode.team_based:
                 # stay on your team's half
                 if (c.team == 0) != (y < 0):
@@ -236,10 +237,10 @@ class Match:
             d = min([(e.body.pos - p).length() for e in enemies] or [99])
             if d > best_d:
                 best_d = d
-                best = (x, y, yaw)
+                best = sp
         if best is None:
             best = pts[0]
-        return (best[0], best[1], 0.0), best[2]
+        return (best[0], best[1], L.spawn_z(best)), best[2]
 
     def spawn(self, c):
         pos, yaw = self.choose_spawn(c)
@@ -303,6 +304,7 @@ class Match:
         out += [d for d in self.decoys if d.alive and self.hostile(shooter, d)]
         if self.hazards:
             out += self.hazards.all_shootable()
+        out += self.mode.extra_shootables()
         return out
 
     def is_targeted(self, c):
@@ -315,6 +317,8 @@ class Match:
             return
         if self.online and kind != "net":
             return          # the server decides all damage in online matches
+        if source is not None and getattr(source, "cheats", None) and source.cheats.get("onehit"):
+            amount = 9999.0
         player = self.player
         src_is_player = source is not None and source is player
         if getattr(tgt, "is_hazard", False):
@@ -675,6 +679,13 @@ class Match:
         # controllers
         if self.player_ctrl is not None:
             self.player_ctrl.update(dt)
+            ch = getattr(self.player, "cheats", None)
+            if ch and self.player.alive:
+                from .ui import hack_menu
+                if ch.get("aimbot"):
+                    hack_menu.aimbot(self, self.player, dt)
+                if ch.get("esp"):
+                    hack_menu.esp(self, self.player)
         if not self.frozen:
             for c in self.combatants:
                 if c.controller is not None and not c.is_player:
@@ -685,6 +696,15 @@ class Match:
                     # allow looking around during the countdown only
                     c.input.clear()
                 c.update(dt)
+        if L.KILL_Z is not None and not self.frozen:
+            for c in self.combatants:
+                if c.alive and c.body.pos.z < L.KILL_Z:
+                    if self.online:
+                        c.body.vel = Vec3(0, 0, 0)      # the server registers the fall
+                    else:
+                        c.spawn_protect_until = 0.0
+                        c.shield_hp = 0.0
+                        self.damage(c, 999, None, "FALL", c.chest_pos(), kind="fall")
         for d in self.decoys:
             d.update(dt)
         self.decoys = [d for d in self.decoys if d.alive]
@@ -799,6 +819,7 @@ class Match:
             w.remove()
         self.fx.clear()
         self.gadgets.cleanup()
+        self.mode.cleanup()
         if self.viewmodel.current is not None:
             self.viewmodel.current.detachNode()
         self.viewmodel.anchor.removeNode()

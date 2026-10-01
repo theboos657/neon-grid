@@ -12,4 +12,5 @@ LOADOUT_POOL = [
     ("nova", "vx9"),
 ]
 
-BOT_SKINS = ["default", "shadow", "medic", "ronin", "synth", "hazmat", "cobalt", "emerald"]
+BOT_SKINS = ["default", "shadow", "medic", "ronin", "synth", "hazmat", "cobalt", "emerald",
+             "banana", "shark", "astro", "bones", "knight", "pirate", "kitty"]

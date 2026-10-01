@@ -35,7 +35,7 @@ def parse_args(argv):
     ap.add_argument("--difficulty", default="normal",
                     choices=["easy", "normal", "hard", "nightmare"])
     ap.add_argument("--ads", action="store_true", help="test hook: hold aim-down-sights")
-    ap.add_argument("--map", default="grid", choices=["grid", "forest", "backrooms"])
+    ap.add_argument("--map", default="grid", choices=["grid", "forest", "backrooms", "coral", "skyline", "range"])
     ap.add_argument("--netmode", choices=["ffa", "duel", "team", "coop"],
                     help="test hook: online mode for --nettest")
     ap.add_argument("--netsize", type=int, default=2)

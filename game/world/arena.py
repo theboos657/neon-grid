@@ -31,7 +31,7 @@ MAT_NEON = Vec4(1.0, 0.0, 0.0, 2.6)
 MAT_SCREEN = Vec4(1.0, 0.0, 0.0, 1.4)
 
 SIGN_TEXT = {"sign_grid": "THE  GRID", "sign_arena": "ARENA 07", "sign_sponsor": "NEOTEK",
-             "sign_danger": "HIGH VOLTAGE"}
+             "sign_danger": "HIGH VOLTAGE", "sign_range": "TRAINING RANGE"}
 
 
 class ArenaVisuals:

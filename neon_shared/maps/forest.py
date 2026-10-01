@@ -88,6 +88,8 @@ LASER_SWEEPERS = [(-12, 22, 6.0), (12, -22, 6.0)]
 MINE_FIELD = [(-6, -9), (6, 9), (-12, 12), (12, -12), (-26, 20), (26, -20), (-4, 24),
               (4, -24), (-20, -12), (20, 12), (-2, 11), (2, -11)]
 CAMPFIRE = (0.0, -9.5)
+HEAL_SPOTS = [(-3, -6), (5, 9), (-26, 12), (26, -12), (-12, -28), (12, 28),
+              (-22, 20, CATWALK_Z), (22, -20, CATWALK_Z)]
 
 
 def _clear_spots():
@@ -95,6 +97,7 @@ def _clear_spots():
     pts = [(x, y, 3.0) for (x, y, _) in SPAWNS]
     pts += [(p[0], p[1], 2.2) for p in LOOT_BOXES]
     pts += [(p[0], p[1], 2.2) for p in CHARGE_PORTS]
+    pts += [(p[0], p[1], 1.8) for p in HEAL_SPOTS]
     pts += [(p[0], p[1], 2.6) for p in JUMP_PADS]
     pts += [(p[0], p[1], 2.0) for p in TRAP_SPOTS]
     pts += [(p[0], p[1], 1.6) for p in MINE_FIELD]
@@ -234,4 +237,5 @@ def build():
         "TRAP_SPOTS": TRAP_SPOTS, "DRONE_SPAWNS": DRONE_SPAWNS, "GRAVITY_ZONES": GRAVITY_ZONES,
         "LASER_SWEEPERS": LASER_SWEEPERS, "MINE_FIELD": MINE_FIELD, "HOLO_SIGNS": [],
         "DECOR": decor, "THEME": theme,
+        "HEAL_SPOTS": HEAL_SPOTS,
     }

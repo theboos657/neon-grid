@@ -69,6 +69,13 @@ class Mode:
         self.names = list(BOT_NAMES)
         random.shuffle(self.names)
 
+    def extra_shootables(self):
+        """Things besides combatants and hazards that bullets can hit (training targets)."""
+        return []
+
+    def cleanup(self):
+        pass
+
     # -------------------------------------------------------------- setup
     def hazard_config(self):
         return {"turrets": True, "drones": 2, "traps": True, "chaos": self.chaos,
@@ -546,6 +553,12 @@ def create(match, cfg, showcase=False):
     mode = cfg.get("mode", "ffa")
     if mode == "online":
         return NetFFA(match, cfg)
+    if mode == "training":
+        from .training import Training
+        return Training(match, cfg)
+    if mode == "story":
+        from .story.campaign import StoryMission
+        return StoryMission(match, cfg)
     if mode == "duel":
         return Duel(match, cfg)
     if mode == "team":

@@ -26,6 +26,11 @@ def update(c, dt):
     m = c.match
     b = c.body
     inp = c.input
+    ch = getattr(c, "cheats", None)              # hack menu (offline, this match only)
+    if ch and (ch.get("fly") or ch.get("noclip")):
+        from ..ui.hack_menu import fly_update
+        fly_update(c, dt)
+        return
     now = m.time
     was_ground = b.on_ground
     if was_ground:
@@ -87,6 +92,8 @@ def update(c, dt):
     else:
         top = WALK
     top *= mult
+    if ch and ch.get("speed"):
+        top *= 1.8
 
     dashing = now < c.dash_until
     if dashing:
@@ -134,7 +141,7 @@ def update(c, dt):
 
     # --- jump (with coyote time); slide-jumps keep their momentum
     if inp.jump and not stunned and (b.on_ground or c.air_time < COYOTE) and c.jump_lock <= 0:
-        b.vel.z = JUMP_V
+        b.vel.z = JUMP_V * (2.2 if ch and ch.get("superjump") else 1.0)
         b.on_ground = False
         c.air_time = COYOTE
         c.jump_lock = 0.2
@@ -144,7 +151,7 @@ def update(c, dt):
         c.jump_lock -= dt
 
     # --- vertical forces
-    g = GRAVITY
+    g = GRAVITY * (0.35 if ch and ch.get("lowgrav") else 1.0)
     if m.hazards and m.hazards.gravity_at(b.pos):
         g = GRAVITY * 0.12
         if b.vel.z < 4.5:
@@ -161,6 +168,8 @@ def update(c, dt):
     if sp > MAX_SPEED:
         b.vel *= MAX_SPEED / sp
 
+    if c.kind == "bot" and b.on_ground and getattr(c, "launched", 0) <= 0:
+        _edge_guard(c, m, b)
     fall_speed = -b.vel.z
     m.coll.move(b, dt)
     if b.on_ground and not was_ground:
@@ -182,3 +191,21 @@ def update(c, dt):
                 c.step_phase -= 1.0
                 if not c.crouching:
                     m.audio.play3d("step", b.pos, 0.28 if c.sprinting else 0.18, source=c)
+
+
+def _edge_guard(c, m, b):
+    """Rooftop maps: bots refuse to walk, strafe or dash off a deadly ledge."""
+    from neon_shared import arena_layout as L
+    if L.KILL_Z is None:
+        return
+    hv = Vec3(b.vel.x, b.vel.y, 0)
+    sp = hv.length()
+    if sp < 0.5:
+        return
+    look = hv / sp * max(0.9, min(2.2, sp * 0.22))
+    px, py = b.pos.x + look.x, b.pos.y + look.y
+    g = m.coll.ground_height(px, py, 0.25, b.pos.z + 0.5)
+    if g < b.pos.z - 2.0 and g < L.KILL_Z + 6.0:
+        b.vel.x = -b.vel.x * 0.2
+        b.vel.y = -b.vel.y * 0.2
+

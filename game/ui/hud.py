@@ -354,7 +354,7 @@ class HUD:
             goals.append(i18n.raw({"duel": "goal_duel_online", "team": "goal_team_online",
                                    "coop": "goal_coop_online"}.get(net_mode, "goal_online"),
                                   n=n, s=size))
-        elif mode in ("coop", "endless"):
+        elif mode in ("coop", "endless", "training"):
             goals.append(i18n.raw("goal_" + mode))
         elif mode == "team":
             s = m.config.get("team_size", 4)

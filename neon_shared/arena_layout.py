@@ -112,12 +112,18 @@ HOLO_SIGNS = [  # x, y, z, heading, text key
 
 DECOR = []          # map-specific scenery the visual builder draws (grid has none)
 THEME = {"sky": False}
+KILL_Z = None       # falling below this height kills (rooftop maps)
+NAV_TOP = 7.0       # highest surface bots may stand on
+HEAL_SPOTS = [(-18, -18), (18, 18), (-18, 18), (18, -18), (0, -12), (0, 12)]
+TARGETS = []        # training-range targets
 
 KEYS = ("HALF", "WALL_H", "CEILING_Z", "CATWALK_Z", "STATIC_BOXES", "SLIDING_WALLS", "SPAWNS",
         "LOOT_BOXES", "CHARGE_PORTS", "JUMP_PADS", "TURRETS", "TRAP_SPOTS", "DRONE_SPAWNS",
-        "GRAVITY_ZONES", "LASER_SWEEPERS", "MINE_FIELD", "HOLO_SIGNS", "DECOR", "THEME")
+        "GRAVITY_ZONES", "LASER_SWEEPERS", "MINE_FIELD", "HOLO_SIGNS", "DECOR", "THEME",
+        "KILL_Z", "NAV_TOP", "HEAL_SPOTS", "TARGETS")
 
-MAP_IDS = ["grid", "forest", "backrooms"]
+MAP_IDS = ["grid", "forest", "backrooms", "coral", "skyline"]
+TRAINING_MAP = "range"      # only used by Training mode
 CURRENT = "grid"
 _GRID = {k: globals()[k] for k in KEYS}
 _CACHE = {}
@@ -131,7 +137,27 @@ class Layout:
         self.__dict__.update(data)
 
 
+def spawn_z(s):
+    """Spawn tuples are (x, y, yaw) or (x, y, yaw, z)."""
+    return s[3] if len(s) > 3 else 0.0
+
+
 def _data(map_id):
+    data = dict(_GRID)
+    data.update(_map_data(map_id))
+    return data
+
+
+def _map_data(map_id):
+    if map_id == "coral":
+        from .maps import coral
+        return coral.build()
+    if map_id == "skyline":
+        from .maps import skyline
+        return skyline.build()
+    if map_id == "range":
+        from .maps import range_
+        return range_.build()
     if map_id == "forest":
         from .maps import forest
         return forest.build()
@@ -142,7 +168,7 @@ def _data(map_id):
 
 
 def get(map_id):
-    if map_id not in MAP_IDS:
+    if map_id not in MAP_IDS and map_id != TRAINING_MAP:
         map_id = "grid"
     lay = _CACHE.get(map_id)
     if lay is None:
@@ -162,4 +188,4 @@ def load(map_id):
 
 
 def valid(map_id):
-    return map_id if map_id in MAP_IDS else "grid"
+    return map_id if (map_id in MAP_IDS or map_id == TRAINING_MAP) else "grid"

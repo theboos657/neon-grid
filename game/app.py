@@ -190,6 +190,8 @@ class NeonGridApp:
         from .ui.debug_menu import DebugMenu
         self.hud = HUD(self)
         self.debug = DebugMenu(self)
+        from .ui.hack_menu import HackMenu
+        self.hacks = HackMenu(self)
         self.menus = Menus(self)
         node.removeNode()
         self.start_showcase()
@@ -260,6 +262,9 @@ class NeonGridApp:
         ctrl.update = upd
 
     def close_match(self):
+        hk = getattr(self, "hacks", None)
+        if hk is not None and hk.visible:
+            hk.close()
         if self.match is not None:
             try:
                 self.match.cleanup()
@@ -274,6 +279,7 @@ class NeonGridApp:
         m = self.match
         from .progression.rewards import apply_match
         summary = apply_match(self, m)
+        summary["story"] = (m.result or {}).get("story")
         self.close_match()
         self.input.set_captured(False)
         self.start_showcase()
@@ -294,6 +300,10 @@ class NeonGridApp:
 
     # ------------------------------------------------------------------ input events
     def _on_escape(self):
+        hk = getattr(self, "hacks", None)
+        if hk is not None and hk.visible:
+            hk.close()
+            return
         if self.debug and self.debug.visible:
             self.debug.toggle()
             return
@@ -437,6 +447,8 @@ class NeonGridApp:
             steps += [("roomsetup",), ("roomshow",), ("roomshot",), ("lobbyshot",)]
             for tab in ("weapons", "attachments", "upgrades", "boosts"):
                 steps.append(("show", "shop", {"tab": tab}))
+            steps.append(("show", "story_scene", {"chapter": 0, "part": "intro"}))
+            steps.append(("show", "story", {}))
             steps.append(("show", "results", {"summary": {
                 "won": True, "mode": "ffa", "subtitle": "#1", "xp": 1450, "coins": 88,
                 "level_before": 3, "level_after": 4, "tier_before": 2, "tier_after": 3,

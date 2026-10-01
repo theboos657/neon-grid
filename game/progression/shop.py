@@ -27,7 +27,7 @@ WEAPON_PRICES = {
     # shotguns
     "breaker": 750, "riot": 900, "scatter": 950,
     # snipers
-    "needle": 1400, "viper": 1200,
+    "needle": 1400, "viper": 1200, "executioner": 2500,
     # plasma
     "caster": 1000, "nova": 1600, "photon": 1100,
     # rail

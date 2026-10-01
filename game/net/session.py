@@ -606,6 +606,22 @@ class NetSession:
                   "ds": [[round(v, 4) for v in d] for d in dirs], "seq": seq}, actor)
         return seq
 
+    # ---- health packs
+    def local_heal(self, index, actor=None):
+        self._as({"t": "heal", "i": index}, actor)
+
+    def _m_healed(self, msg):
+        m = self.match
+        if m is None:
+            return
+        heals = m.interact.heals
+        i = msg.get("i")
+        if isinstance(i, int) and 0 <= i < len(heals):
+            if msg.get("ready"):
+                heals[i].set_ready(True)
+            else:
+                heals[i].taken(self._combatant(msg.get("id")))
+
     # ---- hotbar gadgets
     def local_bomb(self, seq, origin, vel, actor=None):
         self._as({"t": "bomb", "seq": seq, "o": [round(v, 3) for v in origin],

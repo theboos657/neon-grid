@@ -8,6 +8,7 @@ from panda3d.core import Vec3, Vec4
 
 from neon_shared import arena_layout as L
 from neon_shared.abilities import MAX_ENERGY, PORT_CHARGE_TIME
+from neon_shared.pickups import HEAL_AMOUNT, HEAL_RADIUS, HEAL_RESPAWN
 
 from ..gfx import geom
 from ..gfx.effects import fx_node
@@ -89,9 +90,9 @@ class LootBox:
 class ChargePort:
     """Stand on it for PORT_CHARGE_TIME seconds to fully recharge energy."""
 
-    def __init__(self, match, x, y):
+    def __init__(self, match, x, y, z=0.0):
         self.match = match
-        self.pos = Vec3(x, y, 0)
+        self.pos = Vec3(x, y, z)
         self.progress = {}
         self.np = match.world_root.attachNewNode("port")
         self.np.setPos(self.pos)
@@ -122,7 +123,7 @@ class ChargePort:
         active = False
         for c in self.match.living_combatants():
             d = c.body.pos - self.pos
-            if d.x * d.x + d.y * d.y < 1.25 * 1.25 and c.body.pos.z < 0.6:
+            if d.x * d.x + d.y * d.y < 1.25 * 1.25 and -0.3 < d.z < 0.6:
                 if c.energy >= MAX_ENERGY - 0.5:
                     self.progress[c.cid] = 0.0
                     c.port_progress = 0.0
@@ -153,9 +154,9 @@ class ChargePort:
 
 
 class JumpPad:
-    def __init__(self, match, x, y, tx, ty, tz):
+    def __init__(self, match, x, y, tx, ty, tz, z0=0.0):
         self.match = match
-        self.pos = Vec3(x, y, 0)
+        self.pos = Vec3(x, y, z0)
         self.target = Vec3(tx, ty, tz)
         self.np = match.world_root.attachNewNode("jumppad")
         self.np.setPos(self.pos)
@@ -175,9 +176,9 @@ class JumpPad:
         _world_mat(g, MAT_NEON)
         self.glow = g
         # launch velocity so the apex clears the catwalk railings
-        apex = tz + 2.2
+        apex = max(tz, z0) + 2.2
         grav = 18.0
-        vz = math.sqrt(2 * grav * apex)
+        vz = math.sqrt(2 * grav * (apex - z0))
         t_up = vz / grav
         t_down = math.sqrt(2 * (apex - tz) / grav)
         flight = t_up + t_down
@@ -188,7 +189,7 @@ class JumpPad:
                                 math.sin(t * 6), 1)
         for c in self.match.living_combatants():
             d = c.body.pos - self.pos
-            if d.x * d.x + d.y * d.y < 1.0 and c.body.pos.z < 0.3 and c.body.vel.z <= 0.1:
+            if d.x * d.x + d.y * d.y < 1.0 and -0.3 < d.z < 0.3 and c.body.vel.z <= 0.1:
                 c.body.vel = Vec3(self.launch)
                 c.body.on_ground = False
                 c.launched = 1.2
@@ -287,9 +288,96 @@ class Pickup:
         self.np = np_
 
 
+class HealthPack:
+    """Floating green cross: +50 health, comes back 20 s after it is taken."""
+
+    def __init__(self, match, index, x, y, z=0.0):
+        self.match = match
+        self.index = index
+        self.pos = Vec3(x, y, z)
+        self.ready = True
+        self.timer = 0.0
+        self.pending = 0.0       # online: waiting for the server's answer
+        self.np = match.world_root.attachNewNode("healthpack")
+        self.np.setPos(self.pos)
+        mb = geom.MeshBuilder("hp_base")
+        mb.cylinder((0, 0, 0), 0.55, 0.08, (0.2, 0.22, 0.25, 1), 16)
+        base = mb.node()
+        base.reparentTo(self.np)
+        base.setTexture(match.textures.metal)
+        _world_mat(base, MAT_BODY)
+        mb = geom.MeshBuilder("hp_cross")
+        g = (0.25, 1.0, 0.45, 1)
+        mb.cbox((0, 0, 0), (0.62, 0.2, 0.2), g)
+        mb.cbox((0, 0, 0), (0.2, 0.2, 0.62), g)
+        cross = mb.node()
+        cross.reparentTo(self.np)
+        cross.setZ(0.9)
+        cross.setTexture(match.textures.white)
+        _world_mat(cross, Vec4(1, 0, 0, 2.4))
+        cross.setShaderInput("u_hue", 0.0)
+        self.cross = cross
+        mb = geom.MeshBuilder("hp_ring")
+        mb.ring(0.4, 0.5, g, 20, z=0.09)
+        ring = mb.node()
+        ring.reparentTo(self.np)
+        ring.setTwoSided(True)
+        ring.setTexture(match.textures.white)
+        _world_mat(ring, Vec4(1, 0, 0, 2.0))
+        ring.setShaderInput("u_hue", 0.0)
+        self.ring = ring
+
+    def set_ready(self, on):
+        self.ready = on
+        self.timer = 0.0 if on else HEAL_RESPAWN
+        if on:
+            self.cross.show()
+        else:
+            self.cross.hide()
+
+    def update(self, dt, t):
+        m = self.match
+        if not self.ready:
+            self.timer -= dt
+            if self.timer <= 0 and not m.online:
+                self.set_ready(True)
+            self.ring.setColorScale(0.3, 0.3, 0.3, 1)
+            return
+        self.cross.setH(t * 90)
+        self.cross.setZ(0.9 + 0.12 * math.sin(t * 2.5 + self.index))
+        self.ring.setColorScale(1, 1, 1, 1)
+        if self.pending > 0:
+            self.pending -= dt
+            return
+        for c in m.living_combatants():
+            d = c.body.pos - self.pos
+            if d.x * d.x + d.y * d.y > HEAL_RADIUS * HEAL_RADIUS or not -0.6 < d.z < 1.2:
+                continue
+            if c.health >= c.max_health:
+                continue
+            if m.online:
+                if getattr(c, "net_local", False) and m.net is not None:
+                    m.net.local_heal(self.index, c)
+                    self.pending = 0.8
+                continue
+            c.health = min(c.max_health, c.health + HEAL_AMOUNT)
+            self.taken(c)
+            break
+
+    def taken(self, c):
+        m = self.match
+        self.set_ready(False)
+        m.fx.pickup_burst(self.pos + Vec3(0, 0, 0.9), (0.3, 1.0, 0.5))
+        m.audio.play3d("energy_full", self.pos, 0.7)
+        if c is not None and c is m.player and m.hud:
+            from .. import i18n
+            m.hud.notice(i18n.t("pickup_heal", n=int(HEAL_AMOUNT)), (0.3, 1.0, 0.5, 1), 1.4)
+
+
 class Interactables:
     def __init__(self, match):
         self.match = match
+        self.heals = [HealthPack(match, i, *p) for i, p in enumerate(L.HEAL_SPOTS)]
         self.loot = [LootBox(match, *p) for p in L.LOOT_BOXES]
         self.ports = [ChargePort(match, *p) for p in L.CHARGE_PORTS]
         self.pads = [JumpPad(match, *p) for p in L.JUMP_PADS]
@@ -316,6 +404,8 @@ class Interactables:
         for o in self.ports:
             o.update(dt, t)
         for o in self.pads:
+            o.update(dt, t)
+        for o in self.heals:
             o.update(dt, t)
         for o in self.walls:
             o.update(dt, t)

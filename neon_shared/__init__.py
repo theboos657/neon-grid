@@ -4,5 +4,5 @@ Nothing in this package may import Panda3D: the dedicated server runs on a
 headless VPS with only the Python standard library installed.
 """
 
-GAME_VERSION = "1.0.10"
+GAME_VERSION = "1.0.11"
 PROTOCOL_VERSION = 3
