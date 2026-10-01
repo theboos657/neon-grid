@@ -61,8 +61,8 @@ def fire(match, shooter, ws):
         match.shake(0.04 * stats["recoil"])
     dirs = [Vec3(*spread_dir(tuple(fwd), spread, _rng)) for _ in range(stats["pellets"])]
     seq = None
-    if match.net is not None and shooter.is_player:
-        seq = match.net.local_fire(ws, origin, fwd, dirs)
+    if match.net is not None and getattr(shooter, "net_local", False):
+        seq = match.net.local_fire(ws, origin, fwd, dirs, shooter)
     for d in dirs:
         if stats["speed"] > 0:
             match.projectiles.spawn(shooter, muzzle + d * 0.2, d, stats, stats["name"], seq)
@@ -124,8 +124,8 @@ def melee(match, shooter, ws):
     rng_ = stats["range"]
     half_arc = math.radians(stats["arc"] * 0.5)
     hit_any = False
-    if match.net is not None and shooter.is_player:
-        match.net.local_melee(ws, eye, fwd)
+    if match.net is not None and getattr(shooter, "net_local", False):
+        match.net.local_melee(ws, eye, fwd, shooter)
     match.audio.play3d("melee_swing", eye, 0.7, source=shooter)
     for tgt in match.shootables(shooter):
         c = tgt.center() if hasattr(tgt, "center") and tgt.is_hazard else tgt.chest_pos()

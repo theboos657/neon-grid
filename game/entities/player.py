@@ -69,6 +69,8 @@ class PlayerController:
             for i, a in enumerate(("weapon1", "weapon2", "weapon3")):
                 if inp_mgr.pressed(a):
                     inp.switch_to = i
+            inp.bomb = inp.bomb or inp_mgr.pressed("bomb")          # hotbar 4
+            inp.drone = inp.drone or inp_mgr.pressed("drone")       # hotbar 5
             w = inp_mgr.consume_wheel()
             if w:
                 inp.cycle = -1 if w > 0 else 1

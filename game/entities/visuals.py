@@ -88,7 +88,7 @@ class CharacterVisual:
             self.tag = match.overlay_root.attachNewNode(tn)
             self.tag.setScale(0.28)
             self.tag.setBillboardPointEye()
-            self.tag.setDepthTest(False)
+            self.tag.setDepthTest(True)       # walls, trees and props hide name tags
             self.tag.setDepthWrite(False)
             self.tag.setBin("fixed", 50)
             self.tag.setShaderOff(10)

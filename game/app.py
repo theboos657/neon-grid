@@ -389,7 +389,12 @@ class NeonGridApp:
         from .net.session import NetSession
         self.state = "menu"
         self.net = NetSession(self)
-        self.storage.profile["last_mode"]["map"] = self.args.get("map") or "grid"   # read-only run
+        lm = self.storage.profile["last_mode"]                 # read-only run: not saved
+        lm["map"] = self.args.get("map") or "grid"
+        lm["net_mode"] = self.args.get("netmode") or "ffa"
+        lm["net_size"] = self.args.get("netsize", 2)
+        lm["net_bots"] = self.args.get("netbots", 0)
+        lm["difficulty"] = self.args.get("difficulty") or "normal"
         self.net.host_lan()
         self.args["autotest"] = {"mode": "online"}      # enables screenshots/duration
         self._nt_started = False

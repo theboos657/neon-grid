@@ -20,7 +20,7 @@ DEFAULT_BINDINGS = {
     "jump": "space", "sprint": "lshift", "crouch": "lcontrol",
     "fire": "mouse1", "ads": "mouse3", "reload": "r",
     "ability1": "q", "ability2": "e", "melee": "v",
-    "weapon1": "1", "weapon2": "2", "weapon3": "3",
+    "weapon1": "1", "weapon2": "2", "weapon3": "3", "bomb": "4", "drone": "5",
     "scoreboard": "tab", "interact": "f",
 }
 
@@ -31,6 +31,7 @@ DEFAULT_HUD_ELEMENTS = {
     "energy":    {"x": -0.95, "y": -0.955, "scale": 1.0, "opacity": 1.0, "visible": True},
     "ammo":      {"x": 0.95, "y": -0.88, "scale": 1.0, "opacity": 1.0, "visible": True},
     "abilities": {"x": 0.0, "y": -0.88, "scale": 1.0, "opacity": 1.0, "visible": True},
+    "hotbar":    {"x": 0.0, "y": -0.7, "scale": 1.0, "opacity": 1.0, "visible": True},
     "crosshair": {"x": 0.0, "y": 0.0, "scale": 1.0, "opacity": 1.0, "visible": True},
     "killfeed":  {"x": 0.95, "y": 0.9, "scale": 1.0, "opacity": 1.0, "visible": True},
     "matchinfo": {"x": 0.0, "y": 0.92, "scale": 1.0, "opacity": 1.0, "visible": True},

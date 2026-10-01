@@ -232,10 +232,11 @@ class Team(Mode):
         return {"turrets": True, "drones": 0, "traps": True, "chaos": self.chaos}
 
     def setup(self):
+        size = max(1, min(5, int(self.cfg.get("team_size", 4))))
         self.add_player(0)
-        for _ in range(3):
+        for _ in range(size - 1):
             self.add_bot(0, {"easy": "easy", "nightmare": "hard"}.get(self.difficulty, "normal"))
-        for _ in range(4):
+        for _ in range(size):
             self.add_bot(1)
 
     def on_kill(self, victim, killer):
@@ -438,14 +439,17 @@ class Showcase(Mode):
 
 
 class NetFFA(Mode):
-    """Online / LAN free-for-all.  The server owns score, health and the clock;
-    this mode only builds the roster and presents server state."""
+    """Online / LAN matches (free-for-all, 1v1, teams, co-op vs bots).  The server owns
+    score, health and the clock; this mode builds the roster, runs the AI of the bots
+    this game hosts, and presents server state."""
     key = "ffa"
 
     def __init__(self, match, cfg):
         super().__init__(match, cfg)
         self.session = cfg["session"]
         self.start = cfg["start"]
+        self.net_mode = cfg.get("net_mode", "ffa")
+        self.team_based = self.net_mode in ("team", "coop")
         self.score_limit = self.session.score_limit
         self.time_limit = 0.0
         self.loadouts = {pl["id"]: pl.get("w") or [] for pl in self.start.get("players", [])}
@@ -460,31 +464,65 @@ class NetFFA(Mode):
         else:
             self.m.spawn(c)
 
+    def _team(self, team, me=False):
+        """Server team (-1 in free-for-all) -> local team (everyone else is hostile)."""
+        if self.team_based and team in (0, 1):
+            return team
+        return 0 if me else 1
+
     def setup(self):
         s = self.session
         for pl in self.start.get("players", []):
             sid = pl["id"]
             if sid == s.my_id:
-                c = self.add_player()
+                c = self.add_player(self._team(pl.get("team", -1), True))
                 c.net_id = sid
+                c.net_local = True
                 self.m.net_ids[sid] = c
                 self._spawn_from_msg(c, sid)
+            elif pl.get("bot") and pl.get("owner") == s.my_id:
+                self.add_local_bot(sid, pl)
             else:
-                self.add_remote(sid, pl.get("name", "?"), pl.get("skin", "default"))
+                self.add_remote(sid, pl.get("name", "?"), pl.get("skin", "default"),
+                                pl.get("team", -1))
 
-    def add_remote(self, sid, name, skin):
+    def _loadout(self, sid):
         from neon_shared.weapons import BY_ID
         ws = [w for w in self.loadouts.get(sid, []) if w in BY_ID]
         ranged = [w for w in ws if not BY_ID[w]["melee"]] + ["vx9", "vx9"]
         melee = [w for w in ws if BY_ID[w]["melee"]] + ["katana"]
-        lo = {"primary": ranged[0], "secondary": ranged[1], "melee": melee[0],
-              "abilities": ["dash", "shield"]}
-        c = self.m.add_combatant(name, 1, "remote", lo, skin, None, show_name=True)
+        return {"primary": ranged[0], "secondary": ranged[1], "melee": melee[0],
+                "abilities": ["dash", "shield"]}
+
+    def add_local_bot(self, sid, pl):
+        """A bot the server asked this game (the host) to simulate."""
+        diff = self.cfg.get("difficulty", "normal")
+        c = self.m.add_combatant(pl.get("name", "BOT"), self._team(pl.get("team", -1)), "bot",
+                                 self._loadout(sid), pl.get("skin", "default"), None, diff,
+                                 show_name=True)
+        c.net_id = sid
+        c.net_local = True
+        c.respawn_timer = 1e9
+        self.m.net_ids[sid] = c
+        self.session.local_bots.append(c)
+        self._spawn_from_msg(c, sid)
+        return c
+
+    def add_remote(self, sid, name, skin, team=-1):
+        c = self.m.add_combatant(name, self._team(team), "remote", self._loadout(sid), skin, None,
+                                 show_name=True)
         c.net_id = sid
         c.respawn_timer = 1e9
         self.m.net_ids[sid] = c
         self._spawn_from_msg(c, sid)
         return c
+
+    def hud_info(self):
+        timer, small = super().hud_info()
+        if self.team_based:
+            ts = self.session.team_score
+            small = "%s %d   :   %d %s" % (i18n.t("team_blue"), ts[0], ts[1], i18n.t("team_red"))
+        return timer, small
 
     def on_kill(self, victim, killer):
         victim.respawn_timer = 1e9

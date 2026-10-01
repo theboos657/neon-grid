@@ -18,6 +18,11 @@ Server-authoritative rules & anti-cheat sanity checks
 * Fire rate, magazine size (vs. reloads), weapon ownership, shot origin vs.
   server position and pellet cone are checked for every shot.
 * Repeated violations get the client kicked.
+
+Room modes: ffa (optional bots), duel (1v1), team (NvN, bots fill empty
+slots) and coop (the players' team against a bot team).  Bots are simulated by
+the host's game, which sends their input as ``{..., "as": bot_id}``; the
+server validates bot actions exactly like a human's.
 """
 
 import asyncio
@@ -29,6 +34,8 @@ import time
 
 from . import arena_layout as L
 from . import protocol as P
+from . import gadgets as G
+from .bots import BOT_NAMES, BOT_SKINS, LOADOUT_POOL
 from .hitmath import first_static_hit, hit_combatant, normalize
 from .weapons import BY_ID, damage_at, weapon_stats
 
@@ -39,6 +46,9 @@ SPEED_BUDGET_MAX = 14.0       # burst metres (dash is 8 m)
 MAX_REWIND = 0.35
 RESPAWN_DELAY = 3.0
 VIOLATION_KICK = 10
+MODES = ("ffa", "duel", "team", "coop")
+DIFFICULTIES = ("easy", "normal", "hard", "nightmare")
+BOT_ACTIONS = ("st", "fire", "reload", "melee", "phit", "bomb", "boom", "drone", "dhit")
 
 
 class Player:
@@ -69,6 +79,14 @@ class Player:
         self.respawn_at = 0.0
         self.last_damage = 0.0
         self.closed = False
+        self.is_bot = False
+        self.team = -1
+        self.owner = None
+        self.bombs = G.BOMBS_PER_LIFE
+        self.bomb_pending = {}       # seq -> (time, origin, velocity)
+        self.drone_until = 0.0
+        self.drone_ready_at = 0.0
+        self.drone_last_hit = 0.0
 
     def send(self, msg):
         if self.closed:
@@ -100,6 +118,23 @@ class Player:
         return h[0][1], h[0][2]
 
 
+class BotPlayer(Player):
+    """A bot in an online room.  The owner's game runs its AI; corrections go to the owner."""
+
+    def __init__(self, pid, name, skin, team, owner, weapons):
+        super().__init__(pid, None)
+        self.name = name
+        self.skin = skin
+        self.team = team
+        self.owner = owner
+        self.is_bot = True
+        self.weapons = weapons
+
+    def send(self, msg):
+        if msg.get("t") == "correct" and self.owner is not None:
+            self.owner.send(dict(msg, id=self.id))
+
+
 class Room:
     def __init__(self, code, host):
         self.code = code
@@ -109,7 +144,37 @@ class Room:
         self.time_limit = 8 * 60
         self.score_limit = 25
         self.start_time = 0.0
+        self.mode = "ffa"
+        self.size = 2            # players per team (team / coop)
+        self.bots = 0            # extra bots in ffa
+        self.difficulty = "normal"
+        self.team_score = [0, 0]
         self.set_map("grid")
+
+    @property
+    def team_based(self):
+        return self.mode in ("team", "coop")
+
+    def humans(self):
+        return [p for p in self.players.values() if not p.is_bot]
+
+    def capacity(self):
+        """How many humans may be in the room."""
+        return {"duel": 2, "team": 2 * self.size}.get(self.mode, P.MAX_PLAYERS)
+
+    def configure(self, cfg):
+        if cfg.get("map") is not None:
+            self.set_map(str(cfg["map"]))
+        if cfg.get("mode") in MODES:
+            self.mode = cfg["mode"]
+        if cfg.get("difficulty") in DIFFICULTIES:
+            self.difficulty = cfg["difficulty"]
+        for key, lo, hi in (("size", 1, 4), ("bots", 0, P.MAX_PLAYERS - 1)):
+            try:
+                if cfg.get(key) is not None:
+                    setattr(self, key, max(lo, min(hi, int(cfg[key]))))
+            except (TypeError, ValueError):
+                pass
 
     def set_map(self, map_id):
         self.layout = L.get(L.valid(map_id))
@@ -123,9 +188,10 @@ class Room:
     def lobby_msg(self):
         return {"t": "room", "code": self.code, "host": self.host,
                 "players": [{"id": p.id, "name": p.name, "skin": p.skin}
-                            for p in self.players.values()], "state": self.state,
-                "map": self.map, "mode": "ffa", "score_limit": self.score_limit,
-                "time_limit": self.time_limit}
+                            for p in self.humans()], "state": self.state,
+                "map": self.map, "mode": self.mode, "size": self.size, "bots": self.bots,
+                "difficulty": self.difficulty, "max": self.capacity(),
+                "score_limit": self.score_limit, "time_limit": self.time_limit}
 
 
 class GameServer:
@@ -201,6 +267,15 @@ class GameServer:
         handler = getattr(self, "_on_" + str(msg.get("t")), None)
         if handler is None:
             return
+        if "as" in msg:
+            # the host drives its bots: only gameplay actions, only for bots it owns
+            room = p.room
+            bot = room.players.get(msg.get("as")) if room is not None else None
+            if bot is None or not bot.is_bot or bot.owner is not p or \
+                    msg.get("t") not in BOT_ACTIONS:
+                return
+            bot.rtt = p.rtt
+            p = bot
         try:
             handler(p, msg)
         except Exception:
@@ -244,7 +319,7 @@ class GameServer:
             room.score_limit = max(5, min(100, int(cfg.get("score_limit", 25))))
         except (TypeError, ValueError):
             pass
-        room.set_map(str(cfg.get("map", "grid")))
+        room.configure(cfg)
         self.rooms[room.code] = room
         room.players[p.id] = p
         p.room = room
@@ -257,15 +332,17 @@ class GameServer:
         if room is None:
             p.send({"t": "error", "msg": "room %s not found" % code})
             return
-        if len(room.players) >= P.MAX_PLAYERS:
+        if len(room.humans()) >= room.capacity():
             p.send({"t": "error", "msg": "room is full"})
             return
         self._leave(p)
         room.players[p.id] = p
         p.room = room
+        if room.state == "live":
+            # join in progress: take a team (and a bot's place if the room is full)
+            self._join_live(room, p)
         room.broadcast(room.lobby_msg())
         if room.state == "live":
-            # join in progress
             self._send_start(room, only=p)
             self._respawn(room, p)
 
@@ -277,12 +354,89 @@ class GameServer:
         room.set_map(str(m.get("map", "grid")))
         room.broadcast(room.lobby_msg())
 
+    def _on_settings(self, p, m):
+        """Host changes map / mode / team size / bots / bot difficulty in the lobby."""
+        room = p.room
+        if room is None or room.host != p.id or room.state == "live":
+            return
+        room.configure(m)
+        room.broadcast(room.lobby_msg())
+
+    # ------------------------------------------------------------------ teams & bots
+    def _add_bot(self, room, team):
+        used = {q.name for q in room.players.values()}
+        names = [n for n in BOT_NAMES if n not in used] or BOT_NAMES
+        prim, sec = self.rng.choice(LOADOUT_POOL)
+        melee = self.rng.choice([w for w in BY_ID if BY_ID[w]["melee"]])
+        weapons = {w: weapon_stats(w) for w in (prim, sec, melee)}
+        pid = self.next_id
+        self.next_id += 1
+        owner = room.players.get(room.host)
+        b = BotPlayer(pid, self.rng.choice(names), self.rng.choice(BOT_SKINS), team, owner,
+                      weapons)
+        b.room = room
+        room.players[pid] = b
+        return b
+
+    def _remove_bot(self, room, b):
+        room.players.pop(b.id, None)
+        b.room = None
+        room.broadcast({"t": "gone", "id": b.id})
+
+    def _setup_teams(self, room):
+        """Assign teams and create the bots for a new match."""
+        for b in [q for q in room.players.values() if q.is_bot]:
+            room.players.pop(b.id, None)
+        humans = room.humans()
+        room.team_score = [0, 0]
+        mode = room.mode
+        if mode == "team":
+            size = max(room.size, (len(humans) + 1) // 2)
+            for i, h in enumerate(humans):
+                h.team = i % 2
+            for team in (0, 1):
+                have = sum(1 for h in humans if h.team == team)
+                for _ in range(size - have):
+                    self._add_bot(room, team)
+        elif mode == "coop":
+            size = max(room.size, len(humans))
+            for h in humans:
+                h.team = 0
+            for _ in range(size - len(humans)):
+                self._add_bot(room, 0)           # AI wingmen fill your squad
+            for _ in range(size):
+                self._add_bot(room, 1)
+        else:
+            for h in humans:
+                h.team = -1
+            extra = 1 if (mode == "duel" and len(humans) < 2) else \
+                (room.bots if mode == "ffa" else 0)
+            for _ in range(min(extra, P.MAX_PLAYERS - len(humans))):
+                self._add_bot(room, -1)
+
+    def _join_live(self, room, p):
+        p.team = -1
+        if room.team_based:
+            if room.mode == "coop":
+                p.team = 0
+            else:
+                counts = [sum(1 for q in room.humans() if q.team == t and q is not p)
+                          for t in (0, 1)]
+                p.team = 0 if counts[0] <= counts[1] else 1
+            bots = [q for q in room.players.values() if q.is_bot and q.team == p.team]
+        else:
+            bots = [q for q in room.players.values() if q.is_bot] \
+                if len(room.players) > P.MAX_PLAYERS or room.mode == "duel" else []
+        if bots:
+            self._remove_bot(room, bots[-1])
+
     def _on_start(self, p, m):
         room = p.room
         if room is None or room.host != p.id or room.state == "live":
             return
         room.state = "live"
         room.start_time = time.monotonic()
+        self._setup_teams(room)
         for q in room.players.values():
             q.kills = q.deaths = q.score = 0
         self._send_start(room)
@@ -296,18 +450,24 @@ class GameServer:
             q.history.clear()
             q.shots_since_reload.clear()
             q.reload_at.clear()
+            q.bombs = G.BOMBS_PER_LIFE
+            q.drone_until = q.drone_ready_at = 0.0
         room.broadcast(room.lobby_msg())
 
     def _send_start(self, room, only=None):
         spawns = {}
         for q in room.players.values():
-            x, y, yaw = self._spawn_point(room, q)
-            q.pos = (x, y, 0.0)
-            q.yaw = yaw
-            spawns[str(q.id)] = [x, y, 0.0, yaw]
+            if only is None or q is only:
+                x, y, yaw = self._spawn_point(room, q)
+                q.pos = (x, y, 0.0)
+                q.yaw = yaw
+            spawns[str(q.id)] = [q.pos[0], q.pos[1], q.pos[2], q.yaw]
         msg = {"t": "start", "spawns": spawns, "time_limit": room.time_limit,
-               "score_limit": room.score_limit, "map": room.map, "mode": "ffa",
-               "players": [{"id": q.id, "name": q.name, "skin": q.skin, "w": list(q.weapons)}
+               "score_limit": room.score_limit, "map": room.map, "mode": room.mode,
+               "size": room.size, "difficulty": room.difficulty, "ts": room.team_score,
+               "players": [{"id": q.id, "name": q.name, "skin": q.skin, "w": list(q.weapons),
+                            "team": q.team, "bot": q.is_bot,
+                            "owner": q.owner.id if q.owner is not None else None}
                            for q in room.players.values()]}
         if only is not None:
             only.send(msg)
@@ -320,12 +480,17 @@ class GameServer:
             return
         room.players.pop(p.id, None)
         p.room = None
-        if not room.players:
+        if not room.humans():
             self.rooms.pop(room.code, None)
             log.info("room %s closed", room.code)
             return
+        if room.state == "live":
+            room.broadcast({"t": "gone", "id": p.id})
+            # the leaver's game was running these bots
+            for b in [q for q in room.players.values() if q.is_bot and q.owner is p]:
+                self._remove_bot(room, b)
         if room.host == p.id:
-            room.host = next(iter(room.players))
+            room.host = room.humans()[0].id
         room.broadcast(room.lobby_msg())
 
     def _on_leave(self, p, m):
@@ -340,7 +505,8 @@ class GameServer:
         for r in list(self.rooms.values())[:200]:
             host = r.players.get(r.host)
             rooms.append({"code": r.code, "host": host.name if host else "?",
-                          "players": len(r.players), "max": P.MAX_PLAYERS, "state": r.state,
+                          "players": len(r.humans()), "max": r.capacity(), "state": r.state,
+                          "mode": r.mode, "size": r.size,
                           "score_limit": r.score_limit, "time_limit": r.time_limit,
                           "map": r.map})
         p.send({"t": "rooms", "rooms": rooms})
@@ -466,8 +632,9 @@ class GameServer:
         limit = t_wall if t_wall is not None else s["maxr"]
         hits = []
         for q in room.players.values():
-            if q is shooter or not q.alive:
-                continue
+            if q is shooter or not q.alive or \
+                    (room.team_based and q.team == shooter.team):
+                continue                     # bullets pass teammates
             pos, cr = q.pos_at(t)
             r = hit_combatant(o, d, pos, cr, limit)
             if r is not None:
@@ -556,9 +723,87 @@ class GameServer:
                 continue
             self._damage(room, p, q, s["dmg"], s["name"], False)
 
+    # ------------------------------------------------------------------ hotbar gadgets
+    def _on_bomb(self, p, m):
+        room = p.room
+        if room is None or room.state != "live" or not p.alive:
+            return
+        o = P.vec3(m.get("o"), p.eye())
+        v = P.vec3(m.get("v"), (0.0, 0.0, 0.0))
+        seq = m.get("seq")
+        if p.bombs <= 0 or not isinstance(seq, int) or not self._origin_ok(p, o) or \
+                math.sqrt(v[0] ** 2 + v[1] ** 2 + v[2] ** 2) > G.BOMB_THROW_SPEED + 15.0:
+            self._violation(p, "bomb")
+            return
+        p.bombs -= 1
+        p.bomb_pending[seq] = (time.monotonic(), o, v)
+        room.broadcast({"t": "bomb", "id": p.id, "o": list(o), "v": list(v)}, exclude=p)
+
+    def _on_boom(self, p, m):
+        room = p.room
+        if room is None or room.state != "live":
+            return
+        rec = p.bomb_pending.pop(m.get("seq"), None) if isinstance(m.get("seq"), int) else None
+        if rec is None:
+            return
+        t0, o, v = rec
+        now = time.monotonic()
+        pos = P.vec3(m.get("pos"), o)
+        age = now - t0
+        # a bomb can't blow up early, late, or further than it can be thrown
+        if age < G.BOMB_FUSE * 0.5 - p.rtt or age > G.BOMB_FUSE + 4.0 or math.dist(o, pos) > 40.0:
+            self._violation(p, "bomb blast")
+            return
+        room.broadcast({"t": "boom", "id": p.id, "pos": list(pos)}, exclude=p)
+        for q in list(room.players.values()):
+            if not q.alive:
+                continue
+            chest = (q.pos[0], q.pos[1], q.pos[2] + 1.2)
+            dist = math.dist(chest, pos)
+            if dist > G.BOMB_RADIUS + 0.4:
+                continue
+            d = (chest[0] - pos[0], chest[1] - pos[1], chest[2] - pos[2] + 0.2)
+            dl = math.sqrt(d[0] ** 2 + d[1] ** 2 + d[2] ** 2)
+            if dl > 0.05:
+                tw, _ = first_static_hit((pos[0], pos[1], pos[2] + 0.2),
+                                         (d[0] / dl, d[1] / dl, d[2] / dl),
+                                         room.layout.STATIC_BOXES, dl)
+                if tw is not None:
+                    continue                      # behind cover
+            k = max(0.0, 1.0 - max(0.0, dist - 0.5) / G.BOMB_RADIUS * 0.7)
+            self._damage(room, p, q, G.BOMB_DMG * k * (0.5 if q is p else 1.0), "BOMB", False)
+
+    def _on_drone(self, p, m):
+        room = p.room
+        if room is None or room.state != "live" or not p.alive:
+            return
+        now = time.monotonic()
+        if now < p.drone_ready_at - 1.0:
+            self._violation(p, "drone cooldown")
+            return
+        p.drone_until = now + G.DRONE_LIFE + 1.0
+        p.drone_ready_at = now + G.DRONE_COOLDOWN
+        room.broadcast({"t": "drone", "id": p.id}, exclude=p)
+
+    def _on_dhit(self, p, m):
+        room = p.room
+        if room is None or room.state != "live":
+            return
+        now = time.monotonic()
+        q = room.players.get(m.get("tgt"))
+        if now > p.drone_until or q is None or q is p or not q.alive or \
+                now - p.drone_last_hit < G.DRONE_FIRE_INTERVAL * 0.6 or \
+                math.dist(p.pos, q.pos) > G.DRONE_RANGE + 8.0:
+            return
+        p.drone_last_hit = now
+        self._damage(room, p, q, G.DRONE_DMG, "DRONE", False)
+        room.broadcast({"t": "dshot", "id": p.id, "v": q.id}, exclude=p)
+
     def _damage(self, room, attacker, victim, dmg, wname, head):
         if not victim.alive or dmg <= 0:
             return
+        if room.team_based and attacker is not victim and attacker.team == victim.team:
+            return                                  # no friendly fire
         now = time.monotonic()
         if now < victim.respawn_at + 1.5:      # spawn protection
             return
@@ -576,6 +821,8 @@ class GameServer:
             if attacker is not victim:
                 attacker.kills += 1
                 attacker.score += 1
+                if room.team_based and attacker.team in (0, 1):
+                    room.team_score[attacker.team] += 1
             room.broadcast({"t": "kill", "k": attacker.id, "v": victim.id, "w": wname, "hs": head})
 
     def _violation(self, p, what):
@@ -583,6 +830,8 @@ class GameServer:
         p.violations.append(now)
         recent = [t for t in p.violations if now - t < 10.0]
         log.info("violation by %s (%d): %s", p.name, p.id, what)
+        if p.is_bot:
+            return          # bots are the host's simulation; the action itself was refused
         if len(recent) >= VIOLATION_KICK:
             p.send({"t": "kick", "msg": "anti-cheat: " + what})
             p.closed = True
@@ -596,6 +845,9 @@ class GameServer:
         best = None
         best_d = -1.0
         pts = list(room.layout.SPAWNS)
+        if room.team_based and p.team in (0, 1):
+            # each team spawns on its own half, like offline Team Battle
+            pts = [s for s in pts if (p.team == 0) == (s[1] < 0)] or pts
         self.rng.shuffle(pts)
         for (x, y, yaw) in pts:
             d = min([math.hypot(q.pos[0] - x, q.pos[1] - y) for q in room.players.values()
@@ -615,6 +867,8 @@ class GameServer:
         p.history.clear()
         p.shots_since_reload.clear()
         p.reload_at.clear()
+        p.bombs = G.BOMBS_PER_LIFE
+        p.drone_until = 0.0
         room.broadcast({"t": "respawn", "id": p.id, "p": [x, y, 0.0, yaw]})
 
     async def _tick_loop(self):
@@ -636,11 +890,17 @@ class GameServer:
                        round(p.yaw, 1), round(p.pitch, 1), int(p.crouch), int(p.alive),
                        round(p.hp, 1), p.weapon, p.score, p.kills, p.deaths,
                        int(p.rtt * 1000)] for p in room.players.values()]
-                room.broadcast({"t": "snap", "ts": now, "left": max(0.0, left), "pl": pl})
-                top = max((p.score for p in room.players.values()), default=0)
+                room.broadcast({"t": "snap", "ts": now, "left": max(0.0, left), "pl": pl,
+                                "team": room.team_score})
+                if room.team_based:
+                    top = max(room.team_score)
+                else:
+                    top = max((p.score for p in room.players.values()), default=0)
                 if left <= 0 or top >= room.score_limit:
                     self._end(room)
-                for p in room.players.values():
+                for p in list(room.players.values()):
+                    if p.is_bot:
+                        continue
                     try:
                         await p.writer.drain()
                     except Exception:
@@ -649,8 +909,13 @@ class GameServer:
     def _end(self, room):
         room.state = "lobby"
         ranking = sorted(room.players.values(), key=lambda p: (-p.score, p.deaths))
+        a, b = room.team_score
         room.broadcast({"t": "end", "winner": ranking[0].id if ranking else None,
+                        "wteam": (None if a == b else (0 if a > b else 1))
+                        if room.team_based else None, "team": room.team_score,
                         "scores": [[p.id, p.name, p.kills, p.deaths, p.score] for p in ranking]})
+        for q in [q for q in room.players.values() if q.is_bot]:
+            room.players.pop(q.id, None)
         for p in room.players.values():
             p.alive = False
             p.respawn_at = 0.0

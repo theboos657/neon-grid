@@ -16,6 +16,7 @@ import random
 from panda3d.core import Vec3
 
 from neon_shared import weapons as W
+from neon_shared.bots import BOT_NAMES, LOADOUT_POOL  # noqa: F401  (shared with the server)
 
 DIFFICULTY = {
     "easy":   {"reaction": 0.65, "aim_error": 5.5, "turn": 200.0, "track": 3.0, "ability": 0.15,
@@ -31,18 +32,6 @@ DIFFICULTY = {
 DIFF_ORDER = ["easy", "normal", "hard", "nightmare"]
 # coin multiplier per chosen difficulty (applied to all coins earned in the match)
 COIN_MULT = {"easy": 0.5, "normal": 1.0, "hard": 2.0, "nightmare": 2.5}
-
-BOT_NAMES = ["VECTOR", "NULLBYTE", "CIPHER", "GLITCH", "HEXA", "PULSAR", "KERNEL", "SPECTRE",
-             "NEURO", "RAZOR", "PIXEL", "ORBIT", "STATIC", "DAEMON", "QUASAR", "VOLTAGE",
-             "ECHO", "PROXY", "SHARD", "NOVA"]
-
-LOADOUT_POOL = [
-    ("ar7", "vx9"), ("hornet", "hammer50"), ("breaker", "vx9"), ("longbow", "flicker"),
-    ("wasp", "vx9"), ("caster", "hammer50"), ("triburst", "flicker"), ("riot", "vx9"),
-    ("lmg", "vx9"), ("buzz", "hammer50"), ("viper", "flicker"), ("arcrail", "vx9"),
-    ("photon", "vx9"), ("scatter", "flicker"), ("needle", "hornet"), ("lance", "wasp"),
-    ("nova", "vx9"),
-]
 
 
 def random_loadout(rng, difficulty="normal"):
@@ -393,6 +382,15 @@ class BotBrain:
 
     def _use_ability(self, tgt):
         c = self.c
+        # hotbar gadgets: lob a bomb at mid range, call a drone when fighting
+        if tgt is not None:
+            dist = (tgt.body.pos - c.body.pos).length()
+            if c.bombs > 0 and 7.0 < dist < 18.0 and self.rng.random() < 0.35:
+                c.input.bomb = True
+                return
+            if self.m.time >= c.drone_ready_at and self.rng.random() < 0.3:
+                c.input.drone = True
+                return
         for i, ab in enumerate(c.abilities):
             if not ab.ready or c.energy < ab.data["energy"]:
                 continue

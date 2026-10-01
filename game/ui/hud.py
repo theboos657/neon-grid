@@ -234,6 +234,23 @@ class HUD:
             cd = T.text(node, "", (0, 0.085), 0.03, T.WHITE, "center", f_ui)
             self.ab_slots.append((node, fill, border, icon, key, cd))
         e.bounds = (-0.17, 0.17, -0.13, 0.12)
+        # --- hotbar: 1-3 weapons, 4 bombs, 5 drone
+        e = s["hotbar"]
+        self.hb_slots = []
+        for i in range(5):
+            x = (i - 2) * 0.19
+            if i18n.is_rtl():
+                x = -x
+            node = e.content.attachNewNode("hb%d" % i)
+            node.setPos(x, 0, 0)
+            bg = T.card(node, -0.088, 0.088, -0.05, 0.05, (0.02, 0.05, 0.07, 0.8))
+            edge = T.card(node, -0.088, 0.088, -0.05, -0.044, T.CYAN_DIM)
+            key = T.text(node, "", (-0.079, 0.022), 0.024, T.GREY, "left", f_ui)
+            name = T.text(node, "", (0, -0.012), 0.024, T.WHITE, "center", f_ui)
+            sub = T.text(node, "", (0, -0.038), 0.021, T.GREY, "center", f_ui)
+            self.hb_slots.append({"bg": bg, "edge": edge, "key": key, "name": name, "sub": sub,
+                                  "last": None})
+        e.bounds = (-0.48, 0.48, -0.06, 0.06)
         # --- crosshair
         e = s["crosshair"]
         self.cross_parts = []
@@ -331,10 +348,19 @@ class HUD:
         md = m.mode
         n = md.score_limit
         goals = []
-        if mode in ("coop", "endless"):
+        net_mode = m.config.get("net_mode", "ffa")
+        if mode == "online":
+            size = m.net.room_size if m.net is not None else 2
+            goals.append(i18n.raw({"duel": "goal_duel_online", "team": "goal_team_online",
+                                   "coop": "goal_coop_online"}.get(net_mode, "goal_online"),
+                                  n=n, s=size))
+        elif mode in ("coop", "endless"):
             goals.append(i18n.raw("goal_" + mode))
+        elif mode == "team":
+            s = m.config.get("team_size", 4)
+            goals.append(i18n.raw("goal_team_size", n=n, s=s))
         else:
-            key = "goal_" + mode if mode in ("ffa", "duel", "team", "online") else "goal_ffa"
+            key = "goal_" + mode if mode in ("ffa", "duel") else "goal_ffa"
             goals.append(i18n.raw(key, n=n))
         tl = md.time_limit
         if m.online and m.net is not None:
@@ -345,7 +371,11 @@ class HUD:
             goals.append(i18n.raw("goal_lives", n=md.lives))
         if md.chaos:
             goals.append(i18n.raw("goal_chaos"))
-        T.set_text(self.brief_mode, i18n.t("mode_" + mode))
+        if mode == "online" and m.net is not None:
+            T.set_text(self.brief_mode, i18n.visual(i18n.raw("mode_online_x",
+                                                             m=m.net.mode_label())))
+        else:
+            T.set_text(self.brief_mode, i18n.t("mode_" + mode))
         T.set_text(self.brief_map, i18n.t("brief_map", map=i18n.raw("map_" + m.map_id)))
         T.set_text(self.brief_goal, "\n".join(vis(g, 62) for g in goals[:4]))
         T.set_text(self.brief_tip_h, i18n.t("brief_tip"))
@@ -372,6 +402,32 @@ class HUD:
         self.root.hide()
         self.scoreboard.hide()
         self.fps.hide()
+
+    def _update_hotbar(self, m, p):
+        from ..input import key_label
+        b = self.app.storage.settings["controls"]["bindings"]
+        rows = []
+        for i, ws in enumerate(p.weapons[:3]):
+            rows.append((key_label(b["weapon%d" % (i + 1)]), ws.name.upper(),
+                         "" if ws.melee else "%d" % (ws.mag + ws.reserve), i == p.slot, True))
+        rows.append((key_label(b.get("bomb", "4")), i18n.t("hb_bomb"), "x %d" % p.bombs, False,
+                     p.bombs > 0))
+        left = p.drone_ready_at - m.time
+        rows.append((key_label(b.get("drone", "5")), i18n.t("hb_drone"),
+                     i18n.t("hb_ready") if left <= 0 else "%ds" % math.ceil(left), False,
+                     left <= 0))
+        for slot, (key, name, sub, active, ready) in zip(self.hb_slots, rows):
+            sig = (key, name, sub, active, ready)
+            if sig == slot["last"]:
+                continue
+            slot["last"] = sig
+            T.set_text(slot["key"], key)
+            T.set_text(slot["name"], name[:12])
+            T.set_text(slot["sub"], sub)
+            col = T.CYAN if active else (T.CYAN_DIM if ready else (0.3, 0.32, 0.35, 1))
+            slot["edge"].setColor(*col)
+            slot["bg"].setColor(*((0.04, 0.2, 0.25, 0.9) if active else (0.02, 0.05, 0.07, 0.8)))
+            slot["name"].node().setTextColor(*(T.WHITE if ready else T.GREY))
 
     def _refresh_ability_icons(self):
         m = self.match
@@ -584,6 +640,7 @@ class HUD:
                 fill.setColor(0.3, 0.4, 0.45, 0.4)
                 border.setColor(0.3, 0.4, 0.45, 1)
                 T.set_text(cd, "%d" % math.ceil(ab.cooldown_left) if not locked else "EMP")
+        self._update_hotbar(m, p)
         # crosshair
         self._update_crosshair(dt, m, p, ws, st)
         # damage direction arcs

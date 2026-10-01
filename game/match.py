@@ -171,6 +171,8 @@ class Match:
                       "wave": 0, "time": 0.0}
         self.interact = Interactables(self)
         self.projectiles = ProjectileManager(self)
+        from .combat.gadgets import GadgetManager
+        self.gadgets = GadgetManager(self)
         self.viewmodel = ViewModel(app.postfx.vm_root, self.textures, self.lights)
         self.viewmodel.set_scope_view(app.scope)
         vm_amb = {"forest": Vec3(0.75, 0.72, 0.62), "backrooms": Vec3(0.72, 0.64, 0.42)}
@@ -470,7 +472,7 @@ class Match:
             self.first_blood = True
             if killer_c is self.player:
                 self._announce("first_blood")
-        if killer_c is self.player:
+        if killer_c is not None and killer_c is self.player:   # no player in the menu showcase
             st = self.stats
             st["kills"] += 1
             st["xp"] += 100 + (25 if headshot else 0)
@@ -540,7 +542,7 @@ class Match:
                 self.hud.announcer_caption(cap)
 
     def on_hazard_destroyed(self, h, source):
-        if source is self.player:
+        if source is not None and source is self.player:
             self.stats["hazards"] += 1
             self.stats["xp"] += 60
             from .progression.shop import HAZARD_COINS
@@ -566,7 +568,20 @@ class Match:
         elif reason in ("cooldown", "locked"):
             self.audio.play2d("ability_denied", 0.5)
 
+    def gadget_denied(self, reason, c):
+        if not self.hud:
+            return
+        if reason == "no_bombs":
+            self.hud.notice(i18n.t("no_bombs"), (1.0, 0.5, 0.3, 1), 1.0)
+        elif reason == "drone_cd":
+            self.hud.notice(i18n.t("drone_cd", n=int(math.ceil(c.drone_ready_at - self.time))),
+                            (1.0, 0.5, 0.3, 1), 1.0)
+        self.audio.play2d("ability_denied", 0.6)
+
     def on_loot(self, c, ammo, coins):
+        if not self.online:
+            from neon_shared.gadgets import BOMBS_PER_LIFE
+            c.bombs = min(BOMBS_PER_LIFE + 1, c.bombs + 1)      # loot boxes carry a spare bomb
         if c is self.player:
             self.stats["loot"] += 1
             if self.hud:
@@ -604,8 +619,8 @@ class Match:
 
     def on_reload(self, c, ws):
         self.audio.play3d("reload", c.body.pos, 0.6, source=c)
-        if self.net is not None and c is self.player:
-            self.net.local_reload(ws)
+        if self.net is not None and getattr(c, "net_local", False):
+            self.net.local_reload(ws, c)
 
     def on_fired(self, c, ws):
         # gunfire gives away your position to nearby bots - unless suppressed
@@ -676,6 +691,7 @@ class Match:
         if not self.frozen:
             self.wells = [w for w in self.wells if w.update(dt)]
             self.projectiles.update(dt)
+            self.gadgets.update(dt)
             if self.hazards:
                 self.hazards.update(dt, self.time)
             self.interact.update(dt, self.time)
@@ -782,6 +798,7 @@ class Match:
         for w in self.wells:
             w.remove()
         self.fx.clear()
+        self.gadgets.cleanup()
         if self.viewmodel.current is not None:
             self.viewmodel.current.detachNode()
         self.viewmodel.anchor.removeNode()

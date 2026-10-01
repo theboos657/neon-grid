@@ -4,6 +4,9 @@ Client -> server
     hello   {name, ver, skin, loadout{primary,secondary,melee}, tiers{wid:tier}}
     create  {config{time_limit, score_limit, map}} join {code}      start {}
     map     {map}   (host, lobby only: grid / forest / backrooms)
+    settings {map, mode(ffa/duel/team/coop), size(1-4), bots(0-7), difficulty}   (host, lobby)
+    bomb {seq, o, v}   boom {seq, pos}   drone {}   dhit {tgt}       (hotbar 4 / 5)
+    any gameplay message + "as": bot_id  -> the host acting for a bot it simulates
     st      {p[x,y,z], yaw, pitch, cr, w}           (20 Hz movement state)
     fire    {w, o[3], d[3], ds[[3]...], seq}        (hitscan or projectile launch)
     reload  {w}          melee {w, o, d}          phit {seq, tgt|None, pos[3]}
@@ -14,7 +17,8 @@ Server -> client
     snap    {t, left, pl[[id,x,y,z,yaw,pitch,cr,alive,hp,w,score,kills,deaths,ping]]}
     shot    {id, w, o, e[[3]...]}    hit {a, v, dmg, hs, hp}    kill {k, v, w, hs}
     respawn {id, p[x,y,z,yaw]}       correct {p}      end {scores[[id,name,k,d,s]], winner}
-    error   {msg}    kick {msg}      pong {t}
+    error   {msg}    kick {msg}      pong {t}      gone {id}
+    bomb {id, o, v}  boom {id, pos}  drone {id}  dshot {id, v}   (others' gadgets)
 """
 
 import json

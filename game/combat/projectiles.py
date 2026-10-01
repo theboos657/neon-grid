@@ -82,6 +82,30 @@ class ProjectileManager:
         p.np.setColorScale(3.0, 0.6, 0.2, 1)
         self.active.append(p)
 
+    def spawn_ally_bolt(self, owner, pos, direction):
+        """Shot from a player's hotbar drone: damage is credited to the owner."""
+        from neon_shared.gadgets import DRONE_DMG
+        p = self._take()
+        if p is None:
+            return
+        p.pos = Vec3(pos)
+        p.vel = Vec3(direction) * 38.0
+        p.owner = owner
+        p.dmg = DRONE_DMG
+        p.splash = 0.0
+        p.splash_dmg = 0.0
+        p.color = (0.2, 1.0, 0.6)
+        p.life = 2.0
+        p.size = 0.13
+        p.weapon = "DRONE"
+        p.kind = "ally"
+        p.hs = 1.0
+        p.seq = None
+        p.np.show()
+        p.np.setScale(p.size)
+        p.np.setColorScale(0.6, 3.0, 1.8, 1)
+        self.active.append(p)
+
     def update(self, dt):
         m = self.match
         still = []
@@ -120,8 +144,11 @@ class ProjectileManager:
         m = self.match
         p.life = 0.0
         p.np.hide()
-        if m.net is not None and p.seq is not None and p.owner is m.player:
-            m.net.projectile_hit(p.seq, direct, pos)
+        if m.net is not None and p.seq is not None and getattr(p.owner, "net_local", False):
+            m.net.projectile_hit(p.seq, direct, pos, p.owner)
+        if m.net is not None and p.kind == "ally" and direct is not None and \
+                getattr(p.owner, "net_local", False):
+            m.net.drone_hit(direct, p.owner)
         if p.splash > 0:
             m.radial_damage(pos + normal * 0.2, p.splash, p.splash_dmg, p.owner, p.weapon,
                             kind="plasma", exclude=direct)

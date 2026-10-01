@@ -27,6 +27,7 @@ TIME_LIMITS = [0, 5, 8, 10, 15, 20]
 SCORE_LIMITS = [10, 15, 20, 25, 30, 40, 50]
 MODES = ["ffa", "duel", "team", "coop", "endless"]
 MAPS = ["grid", "forest", "backrooms", "random"]
+NET_MODES = ["ffa", "duel", "team", "coop"]
 DIFFS = ["easy", "normal", "hard", "nightmare"]
 
 
@@ -325,6 +326,13 @@ class Menus:
         self.ui.selector(f, i18n.t("opt_map"), [i18n.t("map_" + m) for m in MAPS],
                          MAPS.index(cfg["map"]), (ox, y), set_map)
         y -= 0.1
+        if mode == "team":
+            sizes = [1, 2, 3, 4, 5]
+            cur = cfg.get("team_size", 4)
+            self.ui.selector(f, i18n.t("opt_team_size"), ["%dv%d" % (n, n) for n in sizes],
+                             sizes.index(cur) if cur in sizes else 3, (ox, y),
+                             lambda i: cfg.__setitem__("team_size", sizes[i]))
+            y -= 0.1
         if mode in ("ffa",):
             opts = [str(n) for n in range(1, 8)]
             self.ui.selector(f, i18n.t("opt_bots"), opts, max(0, min(6, cfg["bots"] - 1)), (ox, y),
@@ -539,9 +547,9 @@ class Menus:
         self.lobby_frame = f
         self.lobby_code = self.ui.label(f, "", (0, 0.45), 0.08, T.CYAN, "center", self.ui.dfont)
         self.lobby_status = self.ui.label(f, "", (0, 0.35), 0.031, T.GOLD, "center", wordwrap=52)
-        self.lobby_info = self.ui.label(f, "", (0, 0.235), 0.036, T.CYAN, "center")
-        self.ui.label(f, i18n.t("mp_players"), (0, 0.13), 0.04, T.GREY, "center")
-        self.lobby_list = [self.ui.label(f, "", (0, 0.06 - i * 0.055), 0.04, T.WHITE, "center")
+        self.lobby_info = self.ui.label(f, "", (0, 0.165), 0.034, T.CYAN, "center")
+        self.ui.label(f, i18n.t("mp_players"), (0, 0.09), 0.038, T.GREY, "center")
+        self.lobby_list = [self.ui.label(f, "", (0, 0.03 - i * 0.052), 0.038, T.WHITE, "center")
                            for i in range(8)]
 
         def leave():
@@ -565,6 +573,10 @@ class Menus:
                                              0.42, 0.06, 0.03)
         self.lobby_addr_btn.hide()
 
+        # host settings row: each button cycles its value
+        def cycle(values, cur):
+            return values[(values.index(cur) + 1) % len(values)] if cur in values else values[0]
+
         def next_map():
             net = self.app.net
             if net is None:
@@ -572,11 +584,36 @@ class Menus:
             if not net.map_supported:
                 self.toast(i18n.t("mp_map_old_server"), 4.0)
                 return
-            maps = MAPS[:-1]
-            net.set_map(maps[(maps.index(net.map) + 1) % len(maps)] if net.map in maps else "grid")
-        self.lobby_map_btn = self.ui.button(f, "", (-0.6, 0.55), next_map, 0.46, 0.06, 0.03,
-                                            color=(0.35, 0.28, 0.05, 0.95))
-        self.lobby_map_btn.hide()
+            net.set_map(cycle(MAPS[:-1], net.map))
+
+        def setting(key, values, attr):
+            def fn():
+                net = self.app.net
+                if net is None:
+                    return
+                if not net.modes_supported:
+                    self.toast(i18n.t("mp_modes_old_server", _wrap=60), 5.0)
+                    return
+                net.set_settings(**{key: cycle(values, getattr(net, attr))})
+            return fn
+
+        def size_or_bots():
+            net = self.app.net
+            if net is not None and net.room_mode == "ffa":
+                setting("bots", list(range(0, 8)), "room_bots")()
+            else:
+                setting("size", [1, 2, 3, 4], "room_size")()
+        gold = (0.35, 0.28, 0.05, 0.95)
+        self.lobby_btns = [
+            self.ui.button(f, "", (-0.62, 0.255), next_map, 0.4, 0.065, 0.028, color=gold),
+            self.ui.button(f, "", (-0.21, 0.255), setting("mode", NET_MODES, "room_mode"),
+                           0.4, 0.065, 0.028, color=gold),
+            self.ui.button(f, "", (0.21, 0.255), size_or_bots, 0.4, 0.065, 0.028, color=gold),
+            self.ui.button(f, "", (0.62, 0.255), setting("difficulty", DIFFS, "room_diff"),
+                           0.4, 0.065, 0.028, color=gold),
+        ]
+        for b in self.lobby_btns:
+            b.hide()
         self.ui.button(self.root, i18n.t("mp_leave"), (T.mx(-self.app.getAspectRatio() + 0.35), -0.88),
                        leave, 0.45, sound="ui_back")
         self.lobby_sig = None
@@ -587,7 +624,8 @@ class Menus:
         if net is None or self.current != "lobby":
             return
         sig = (net.code, net.status, net.error, tuple(net.lobby_players), net.is_host,
-               self.lobby_show_addr, net.map)
+               self.lobby_show_addr, net.map, net.room_mode, net.room_size, net.room_bots,
+               net.room_diff)
         if sig == self.lobby_sig:
             return
         self.lobby_sig = sig
@@ -599,16 +637,30 @@ class Menus:
         T.set_text(self.lobby_status, net.status_text())
         for i, lbl in enumerate(self.lobby_list):
             T.set_text(lbl, net.lobby_players[i] if i < len(net.lobby_players) else "")
+        mode = net.room_mode
+        bots_in_play = mode in ("team", "coop") or (mode == "ffa" and net.room_bots) or \
+            mode == "duel"
         if net.is_host and net.code:
             self.lobby_start.show()
-            self.lobby_map_btn.show()
-            self.lobby_map_btn["text"] = i18n.t("mp_map_btn", map=i18n.raw("map_" + net.map))
+            texts = [i18n.t("mp_map_btn", map=i18n.raw("map_" + net.map)),
+                     i18n.t("mp_mode_btn", m=i18n.raw("nm_short_" + mode)),
+                     i18n.t("mp_bots_btn", n=net.room_bots) if mode == "ffa" else
+                     i18n.t("mp_size_btn", n=net.room_size),
+                     i18n.t("mp_diff_btn", d=i18n.raw("diff_" + net.room_diff))]
+            for b, txt in zip(self.lobby_btns, texts):
+                b.show()
+                b["text"] = txt
+            if mode == "duel":
+                self.lobby_btns[2].hide()            # 1v1 has no size; a bot fills in if alone
         else:
             self.lobby_start.hide()
-            self.lobby_map_btn.hide()
-        T.set_text(self.lobby_info, i18n.t("mp_room_info", mode=i18n.raw("mode_online"),
-                                           map=i18n.raw("map_" + net.map), n=net.score_limit)
-                   if net.code else "")
+            for b in self.lobby_btns:
+                b.hide()
+        info = i18n.raw("mp_room_info", mode=net.mode_label(), map=i18n.raw("map_" + net.map),
+                        n=net.score_limit)
+        if bots_in_play:
+            info += "   |   " + i18n.raw("mp_bot_level", d=i18n.raw("diff_" + net.room_diff))
+        T.set_text(self.lobby_info, i18n.visual(info) if net.code else "")
         local = getattr(net, "hosted_locally", False) and net.is_host and net.code
         if local:
             self.lobby_addr_btn.show()

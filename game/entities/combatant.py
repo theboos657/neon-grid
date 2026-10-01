@@ -21,7 +21,7 @@ REGEN_RATE = 9.0
 
 class InputState:
     __slots__ = ("move_x", "move_y", "jump", "sprint", "crouch", "fire", "fire_pressed", "ads",
-                 "reload", "melee", "ability", "switch_to", "cycle")
+                 "reload", "melee", "ability", "switch_to", "cycle", "bomb", "drone")
 
     def __init__(self):
         self.clear()
@@ -40,6 +40,8 @@ class InputState:
         self.ability = [False, False]
         self.switch_to = -1
         self.cycle = 0
+        self.bomb = False           # hotbar 4
+        self.drone = False          # hotbar 5
 
 
 class Combatant:
@@ -73,6 +75,8 @@ class Combatant:
                                     reserve_mult, mods.get(loadout["secondary"])),
                         WeaponState(loadout["melee"], tiers.get(loadout["melee"], 0))]
         self.slot = 0
+        self.bombs = 0              # hotbar 4, refilled on spawn
+        self.drone_ready_at = 0.0   # hotbar 5 cooldown (match time)
         self.prev_slot = 1
         self.abilities = [AbilityState(a) for a in loadout["abilities"][:2]]
         # scores
@@ -150,6 +154,8 @@ class Combatant:
             w.burst_left = 0
         for a in self.abilities:
             a.cooldown_left = 0.0
+        from neon_shared.gadgets import BOMBS_PER_LIFE
+        self.bombs = BOMBS_PER_LIFE
         self.slot = 0
         self.weapons[0].draw()
         self.input.clear()
@@ -298,6 +304,11 @@ class Combatant:
                     r = try_activate(m, self, ab)
                     if r is not True and self.is_player:
                         m.ability_denied(r)
+            if inp.bomb or inp.drone:
+                err = m.gadgets.throw(self) if inp.bomb else m.gadgets.deploy(self)
+                if err and self.is_player:
+                    m.gadget_denied(err, self)
+                inp.bomb = inp.drone = False
         if self.visual is not None:
             hs = math.hypot(self.body.vel.x, self.body.vel.y)
             cloak = 1.0

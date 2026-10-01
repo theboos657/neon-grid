@@ -474,6 +474,59 @@ STRINGS["he"].update({
 })
 
 
+# --- online modes & team sizes ------------------------------------------------
+STRINGS["en"].update({
+    "desc_team": "Your team of AI wingmen against a bot squad. Pick the size: 1v1 up to 5v5.",
+    "opt_team_size": "TEAM SIZE",
+    "goal_team_size": "{s}v{s}: you and your wingmen against a bot squad. First team to {n} "
+                      "kills wins.",
+    "nm_duel": "1v1", "nm_team": "TEAM {n}v{n}", "nm_coop": "{n}v{n} VS BOTS",
+    "nm_plus_bots": "+ {n} BOTS",
+    "nm_short_ffa": "FREE FOR ALL", "nm_short_duel": "1v1", "nm_short_team": "TEAMS",
+    "nm_short_coop": "VS BOTS",
+    "mode_online_x": "ONLINE {m}",
+    "mp_mode_btn": "MODE: {m}", "mp_size_btn": "TEAMS: {n}v{n}", "mp_bots_btn": "BOTS: {n}",
+    "mp_diff_btn": "BOT LEVEL: {d}", "mp_bot_level": "BOT LEVEL {d}",
+    "mp_modes_old_server": "This server is out of date: only free-for-all works until it is "
+                           "updated.",
+    "goal_duel_online": "One on one. First to {n} kills wins. Alone? A bot steps in.",
+    "goal_team_online": "{s}v{s}: bots fill the empty slots. First team to {n} kills wins.",
+    "goal_coop_online": "Your squad against {s} bots. First team to {n} kills wins.",
+})
+STRINGS["he"].update({
+    "desc_team": "הצוות שלכם עם בוטים נגד חוליית בוטים. בחרו גודל: מ-1 על 1 עד 5 על 5.",
+    "opt_team_size": "גודל קבוצה",
+    "goal_team_size": "{s} על {s}: אתם וחברי הצוות נגד חוליית בוטים. הקבוצה הראשונה ל-{n} "
+                      "הריגות מנצחת.",
+    "nm_duel": "1 על 1", "nm_team": "קבוצות {n} על {n}", "nm_coop": "{n} על {n} נגד בוטים",
+    "nm_plus_bots": "+ {n} בוטים",
+    "nm_short_ffa": "כולם נגד כולם", "nm_short_duel": "1 על 1", "nm_short_team": "קבוצות",
+    "nm_short_coop": "נגד בוטים",
+    "mode_online_x": "אונליין: {m}",
+    "mp_mode_btn": "מצב: {m}", "mp_size_btn": "קבוצות: {n} על {n}", "mp_bots_btn": "בוטים: {n}",
+    "mp_diff_btn": "רמת בוטים: {d}", "mp_bot_level": "רמת בוטים {d}",
+    "mp_modes_old_server": "השרת הזה לא מעודכן: רק כולם נגד כולם עובד עד שיעודכן.",
+    "goal_duel_online": "אחד על אחד. הראשון ל-{n} הריגות מנצח. לבד? בוט נכנס במקום.",
+    "goal_team_online": "{s} על {s}: בוטים ממלאים מקומות פנויים. הקבוצה הראשונה ל-{n} הריגות "
+                        "מנצחת.",
+    "goal_coop_online": "החוליה שלכם נגד {s} בוטים. הקבוצה הראשונה ל-{n} הריגות מנצחת.",
+})
+
+
+STRINGS["en"].update({
+    "el_hotbar": "Hotbar", "hb_bomb": "BOMB", "hb_drone": "DRONE", "hb_ready": "READY",
+    "bind_bomb": "Throw Bomb", "bind_drone": "Deploy Drone",
+    "no_bombs": "No bombs left - they refill when you respawn",
+    "drone_cd": "Drone ready in {n}s",
+})
+STRINGS["he"].update({
+    "el_hotbar": "סרגל כלים", "hb_bomb": "פצצה", "hb_drone": "רחפן", "hb_ready": "מוכן",
+    "bind_bomb": "זריקת פצצה", "bind_drone": "הפעלת רחפן",
+    "no_bombs": "נגמרו הפצצות - הן מתמלאות כשחוזרים לחיים",
+    "drone_cd": "הרחפן מוכן בעוד {n} שניות",
+})
+
+
 def is_rtl():
     return _lang == "he"
 

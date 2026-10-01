@@ -85,6 +85,7 @@ are missing.
   2.5x. In Co-op and Endless, the chosen difficulty shifts the whole enemy ramp.
 - **Modifiers (any mode):** **Lives** (limited lives, last one standing wins) and
   **Chaos** (sweeping lasers, proximity mines, low-gravity lift zones).
+- **Team Battle size:** pick 1v1 up to 5v5 under Match options.
 - **Multiplayer:** see below.
 - **Match briefing:** when a match starts (offline START or the host's START MATCH), a
   panel shows the mode, the map, the objective (score and time limits, lives, chaos) and a
@@ -112,6 +113,17 @@ with the **MAP** button in the lobby.
 
 All maps are generated from fixed seeds (`neon_shared/maps/`), so every player and the
 server build exactly the same collision.
+
+## Hotbar: bombs and drones
+
+The hotbar above the ability icons shows slots 1-3 (weapons), **4 (bombs)** and **5 (drone)**.
+
+- **4 - Bomb.** Throws a bouncing bomb that explodes after 1.8 s (5.5 m blast, up to 110
+  damage, walls block it). You carry 2 per life; offline, loot boxes give a spare.
+- **5 - Drone.** Calls a friendly attack drone that hovers next to you for 20 s and shoots the
+  nearest visible enemy. 35 s cooldown.
+- Bots use both. Online, the server checks every blast and drone hit.
+- Name tags are hidden by walls, trees and props.
 
 ## Weapons, abilities and progression
 
@@ -180,6 +192,12 @@ Every threat warns you before it attacks:
 | Chaos lasers | The beam blinks yellow before it switches between jump height and slide height | — |
 
 ## Multiplayer
+
+**Online modes** (the host picks them with the buttons in the lobby): **Free For All** (with
+0-7 bots), **1v1** (a bot steps in if you are alone), **Teams** 1v1 to 4v4 (bots fill the empty
+slots) and **VS Bots** (all players on one squad against a bot team, e.g. 2v2 vs bots). The host
+also picks the map and the bot level. Bots run on the host's game and the server validates their
+shots like anyone else's.
 
 The host creates a **4-letter room code**. Friends can join with that code, or open
 **Multiplayer → FIND ROOMS**. The room finder lists every open room on your local network

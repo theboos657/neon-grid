@@ -36,6 +36,10 @@ def parse_args(argv):
                     choices=["easy", "normal", "hard", "nightmare"])
     ap.add_argument("--ads", action="store_true", help="test hook: hold aim-down-sights")
     ap.add_argument("--map", default="grid", choices=["grid", "forest", "backrooms"])
+    ap.add_argument("--netmode", choices=["ffa", "duel", "team", "coop"],
+                    help="test hook: online mode for --nettest")
+    ap.add_argument("--netsize", type=int, default=2)
+    ap.add_argument("--netbots", type=int, default=0)
     ap.add_argument("--chaos", action="store_true")
     ap.add_argument("--lives", action="store_true")
     ap.add_argument("--lang", choices=["en", "he"])
@@ -51,7 +55,9 @@ def main(argv=None):
             "shot_interval": args.shot_interval, "menutest": args.menutest,
             "nettest": args.nettest, "weapon": args.weapon,
             "endat": args.endat, "mods": args.mods, "fxtest": args.fxtest, "quality": args.quality,
-            "lang": args.lang, "ads": args.ads, "map": args.map}
+            "lang": args.lang, "ads": args.ads, "map": args.map,
+            "netmode": args.netmode, "netsize": args.netsize, "netbots": args.netbots,
+            "difficulty": args.difficulty}
     mode = args.autotest or args.mode
     if mode:
         cfg = {"mode": mode, "bots": 5, "difficulty": args.difficulty, "lives": args.lives,

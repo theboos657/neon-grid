@@ -54,6 +54,15 @@ class NetSession:
         self.names = {}
         self.map = "grid"
         self.map_supported = False     # servers older than 1.0.9 only know THE GRID
+        self.room_mode = "ffa"          # ffa / duel / team / coop
+        self.room_size = 2
+        self.room_bots = 0
+        self.room_diff = "normal"
+        self.modes_supported = False   # servers older than 1.0.10 only run free-for-all
+        self.teams = {}                 # server id -> team (-1 = none)
+        self.team_score = [0, 0]
+        self.my_team = -1
+        self.local_bots = []            # combatants this game simulates for the server
 
     # ------------------------------------------------------------------ connect
     def _address(self):
@@ -205,12 +214,35 @@ class NetSession:
         if mp not in L.MAP_IDS:
             import random
             mp = random.choice(L.MAP_IDS)
+        # the host's last lobby choices carry over to the next room
         return {"time_limit": cfg.get("time_limit") or 8, "score_limit": cfg.get("score_limit", 25),
-                "map": mp}
+                "map": mp, "mode": cfg.get("net_mode", "ffa"), "size": cfg.get("net_size", 2),
+                "bots": cfg.get("net_bots", 0), "difficulty": cfg.get("difficulty", "normal")}
 
     def set_map(self, map_id):
         """Host only: change the room's map while everyone is in the lobby."""
         self.send({"t": "map", "map": map_id})
+
+    def set_settings(self, **kw):
+        """Host only: mode / size / bots / difficulty (lobby).  Remembered for next time."""
+        lm = self.app.storage.profile["last_mode"]
+        for k, v in kw.items():
+            lm[{"mode": "net_mode", "size": "net_size", "bots": "net_bots"}.get(k, k)] = v
+        self.send(dict(kw, t="settings"))
+
+    def mode_label(self, mode=None, size=None, bots=None):
+        """Short logical-order name like 'TEAM 2v2' or 'FREE FOR ALL + 3 BOTS'."""
+        mode = mode or self.room_mode
+        size = self.room_size if size is None else size
+        bots = self.room_bots if bots is None else bots
+        if mode == "duel":
+            return i18n.raw("nm_duel")
+        if mode == "team":
+            return i18n.raw("nm_team", n=size)
+        if mode == "coop":
+            return i18n.raw("nm_coop", n=size)
+        s = i18n.raw("mode_ffa")
+        return s + ("  " + i18n.raw("nm_plus_bots", n=bots) if bots else "")
 
     # ------------------------------------------------------------------ io
     def send(self, msg):
@@ -278,13 +310,18 @@ class NetSession:
             self.ping_t = 2.0
             self.send({"t": "ping", "t0": now})
         self.send_t -= dt
-        p = m.player
-        if self.send_t <= 0 and p is not None and p.alive:
+        if self.send_t <= 0:
             self.send_t = 1.0 / SEND_RATE
-            self.send({"t": "st", "p": [round(p.body.pos.x, 3), round(p.body.pos.y, 3),
-                                        round(p.body.pos.z, 3)],
-                       "yaw": round(p.yaw, 1), "pitch": round(p.pitch, 1),
-                       "cr": int(p.crouching), "w": p.weapon().id})
+            for c in [m.player] + self.local_bots:
+                if c is None or not c.alive:
+                    continue
+                msg = {"t": "st", "p": [round(c.body.pos.x, 3), round(c.body.pos.y, 3),
+                                        round(c.body.pos.z, 3)],
+                       "yaw": round(c.yaw, 1), "pitch": round(c.pitch, 1),
+                       "cr": int(c.crouching), "w": c.weapon().id}
+                if c is not m.player:
+                    msg["as"] = c.net_id
+                self.send(msg)
         self._interpolate(now)
 
     # ------------------------------------------------------------------ lobby messages
@@ -312,6 +349,14 @@ class NetSession:
         self.is_host = msg.get("host") == self.my_id
         self.map_supported = "map" in msg
         self.map = L.valid(msg.get("map", "grid"))
+        self.modes_supported = "size" in msg
+        if msg.get("mode") in ("ffa", "duel", "team", "coop"):
+            self.room_mode = msg["mode"]
+        for key, attr in (("size", "room_size"), ("bots", "room_bots")):
+            if isinstance(msg.get(key), int):
+                setattr(self, attr, msg[key])
+        if msg.get("difficulty") in ("easy", "normal", "hard", "nightmare"):
+            self.room_diff = msg["difficulty"]
         if isinstance(msg.get("score_limit"), int):
             self.score_limit = msg["score_limit"]
         self.lobby_players = []
@@ -333,8 +378,17 @@ class NetSession:
         self.remote = {}
         from neon_shared import arena_layout as L
         self.map = L.valid(msg.get("map", "grid"))
+        mode = msg.get("mode") if msg.get("mode") in ("ffa", "duel", "team", "coop") else "ffa"
+        self.room_mode = mode
+        if isinstance(msg.get("size"), int):
+            self.room_size = msg["size"]
+        self.teams = {pl["id"]: pl.get("team", -1) for pl in msg.get("players", [])}
+        self.my_team = self.teams.get(self.my_id, -1)
+        self.team_score = list(msg.get("ts") or [0, 0])
+        self.local_bots = []
         cfg = {"mode": "online", "online": True, "session": self, "start": msg,
-               "score_limit": self.score_limit, "time_limit": 0, "map": self.map}
+               "score_limit": self.score_limit, "time_limit": 0, "map": self.map,
+               "net_mode": mode, "difficulty": msg.get("difficulty", "normal")}
         self.app.start_match(cfg)
         self.match = self.app.match
 
@@ -350,14 +404,17 @@ class NetSession:
         if m is None:
             return
         self.time_left = msg.get("left")
+        if isinstance(msg.get("team"), list) and len(msg["team"]) == 2:
+            self.team_score = msg["team"]
         now = time.monotonic()
         for row in msg.get("pl", []):
             sid, x, y, z, yaw, pitch, cr, alive, hp, w, score, kills, deaths, ping = row
             c = self._combatant(sid)
             if c is None:
-                c = m.mode.add_remote(sid, self.names.get(sid, "?"), "default")
+                c = m.mode.add_remote(sid, self.names.get(sid, "?"), "default",
+                                      self.teams.get(sid, -1))
             c.score, c.kills, c.deaths, c.ping = score, kills, deaths, ping
-            if c.is_player:
+            if getattr(c, "net_local", False):
                 c.health = min(c.health, hp) if hp < c.health else hp
                 if not alive and c.alive:
                     c.die()
@@ -409,8 +466,8 @@ class NetSession:
     def _m_shot(self, msg):
         m = self.match
         c = self._combatant(msg.get("id"))
-        if m is None or c is None or not c.alive:
-            return
+        if m is None or c is None or not c.alive or getattr(c, "net_local", False):
+            return              # our own bots' shots were already drawn locally
         from neon_shared.weapons import BY_ID
         s = BY_ID.get(msg.get("w"))
         if s is None:
@@ -486,8 +543,28 @@ class NetSession:
         m = self.match
         if m is None or m.player is None:
             return
-        m.player.body.pos = Vec3(*P.vec3(msg.get("p"), tuple(m.player.body.pos)))
-        m.player.body.vel = Vec3(0, 0, 0)
+        c = self._combatant(msg["id"]) if "id" in msg else m.player
+        if c is None:
+            return
+        c.body.pos = Vec3(*P.vec3(msg.get("p"), tuple(c.body.pos)))
+        c.body.vel = Vec3(0, 0, 0)
+
+    def _m_gone(self, msg):
+        """A player left (or a bot made room for a joiner) during the match."""
+        m = self.match
+        c = m.net_ids.pop(msg.get("id"), None) if m is not None else None
+        if c is None:
+            return
+        self.remote.pop(msg.get("id"), None)
+        c.alive = False
+        c.eliminated = True
+        if c.visual:
+            c.visual.destroy()
+            c.visual = None
+        if c in m.combatants:
+            m.combatants.remove(c)
+        if c in self.local_bots:
+            self.local_bots.remove(c)
 
     def _m_end(self, msg):
         m = self.match
@@ -495,33 +572,90 @@ class NetSession:
             return
         scores = msg.get("scores", [])
         place = 1 + next((i for i, row in enumerate(scores) if row[0] == self.my_id), 0)
-        won = msg.get("winner") == self.my_id
-        m.end({"won": won, "place": place, "mode": "ffa", "subtitle": i18n.t("place", n=place),
-               "score": m.player.score if m.player else 0})
+        if self.room_mode in ("team", "coop"):
+            ts = msg.get("team") or self.team_score
+            wt = msg.get("wteam")
+            won = None if wt is None else wt == self.my_team
+            m.end({"won": won, "place": 1 if won else 2, "mode": "team",
+                   "subtitle": "%d - %d" % (ts[0], ts[1]),
+                   "score": m.player.score if m.player else 0})
+        else:
+            won = msg.get("winner") == self.my_id
+            m.end({"won": won, "place": place, "mode": "ffa",
+                   "subtitle": i18n.t("place", n=place),
+                   "score": m.player.score if m.player else 0})
         self.match = None
 
     # ------------------------------------------------------------------ local actions
-    def local_fire(self, ws, origin, fwd, dirs):
+    def _as(self, msg, actor):
+        """Tag actions of bots we simulate so the server applies them to that bot."""
+        if actor is not None and not actor.is_player:
+            msg["as"] = actor.net_id
+        self.send(msg)
+
+    def local_fire(self, ws, origin, fwd, dirs, actor=None):
         """Returns the projectile sequence number (or None)."""
-        self.fired = getattr(self, "fired", 0) + 1
+        if actor is None or actor.is_player:
+            self.fired = getattr(self, "fired", 0) + 1
         seq = None
         if ws.stats["speed"] > 0:
             self.seq += 1
             seq = self.seq
-        self.send({"t": "fire", "w": ws.id, "o": [round(v, 3) for v in origin],
-                   "d": [round(v, 4) for v in fwd],
-                   "ds": [[round(v, 4) for v in d] for d in dirs], "seq": seq})
+        self._as({"t": "fire", "w": ws.id, "o": [round(v, 3) for v in origin],
+                  "d": [round(v, 4) for v in fwd],
+                  "ds": [[round(v, 4) for v in d] for d in dirs], "seq": seq}, actor)
         return seq
 
-    def local_melee(self, ws, origin, fwd):
-        self.send({"t": "melee", "w": ws.id, "o": [round(v, 3) for v in origin],
-                   "d": [round(v, 4) for v in fwd]})
+    # ---- hotbar gadgets
+    def local_bomb(self, seq, origin, vel, actor=None):
+        self._as({"t": "bomb", "seq": seq, "o": [round(v, 3) for v in origin],
+                  "v": [round(x, 3) for x in vel]}, actor)
 
-    def local_reload(self, ws):
-        self.send({"t": "reload", "w": ws.id})
+    def local_boom(self, seq, pos, actor=None):
+        self._as({"t": "boom", "seq": seq, "pos": [round(v, 3) for v in pos]}, actor)
 
-    def projectile_hit(self, seq, target, pos):
+    def local_drone(self, actor=None):
+        self._as({"t": "drone"}, actor)
+
+    def drone_hit(self, target, actor=None):
+        sid = getattr(target, "net_id", None)
+        if sid is not None:
+            self._as({"t": "dhit", "tgt": sid}, actor)
+
+    def _m_bomb(self, msg):
+        m = self.match
+        c = self._combatant(msg.get("id"))
+        if m is not None and c is not None and not getattr(c, "net_local", False):
+            m.gadgets.remote_bomb(c, Vec3(*P.vec3(msg.get("o"))), Vec3(*P.vec3(msg.get("v"))))
+
+    def _m_boom(self, msg):
+        m = self.match
+        c = self._combatant(msg.get("id"))
+        if m is not None and c is not None and not getattr(c, "net_local", False):
+            m.gadgets.remote_boom(c, Vec3(*P.vec3(msg.get("pos"))))
+
+    def _m_drone(self, msg):
+        m = self.match
+        c = self._combatant(msg.get("id"))
+        if m is not None and c is not None and not getattr(c, "net_local", False):
+            m.gadgets.remote_drone(c)
+
+    def _m_dshot(self, msg):
+        m = self.match
+        c = self._combatant(msg.get("id"))
+        if m is not None and c is not None and not getattr(c, "net_local", False):
+            m.gadgets.remote_drone_shot(c, self._combatant(msg.get("v")))
+
+    def local_melee(self, ws, origin, fwd, actor=None):
+        self._as({"t": "melee", "w": ws.id, "o": [round(v, 3) for v in origin],
+                  "d": [round(v, 4) for v in fwd]}, actor)
+
+    def local_reload(self, ws, actor=None):
+        self._as({"t": "reload", "w": ws.id}, actor)
+
+    def projectile_hit(self, seq, target, pos, actor=None):
         sid = None
         if target is not None and not getattr(target, "is_hazard", False):
             sid = getattr(target, "net_id", None)
-        self.send({"t": "phit", "seq": seq, "tgt": sid, "pos": [round(v, 3) for v in pos]})
+        self._as({"t": "phit", "seq": seq, "tgt": sid, "pos": [round(v, 3) for v in pos]},
+                 actor)
